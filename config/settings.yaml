@@ -1,0 +1,82 @@
+# OpenClaw Memory System 配置文件
+# 复制此文件为 settings.yaml 并根据需要修改
+
+# ==================== Weaviate 配置 ====================
+weaviate:
+  # Weaviate 服务地址
+  host: localhost
+  port: 8080
+  # gRPC 端口 (Docker 默认 50051)
+  grpc_port: 50051
+  
+# ==================== 嵌入模型配置 ====================
+embedding:
+  # 嵌入模型类型: minilm / ollama
+  type: minilm
+  # MiniLM 模型配置
+  minilm:
+    model_name: all-MiniLM-L6-v2
+    dimension: 384
+  # Ollama 模型配置 (备用)
+  ollama:
+    base_url: http://localhost:11434
+    model: nomic-embed-text
+    dimension: 768
+
+# ==================== 检索配置 ====================
+retrieval:
+  # 向量检索召回数量
+  recall_limit: 20
+  # 重排序后返回数量
+  rerank_top_k: 10
+  # 时间衰减因子 (0-1, 越大衰减越快)
+  time_decay_factor: 0.1
+  # 重要性权重 (0-1)
+  importance_weight: 0.3
+
+# ==================== Ollama 配置 ====================
+ollama:
+  # Ollama 服务地址
+  base_url: http://localhost:11434
+  # 聊天模型 (用于摘要和实体提取)
+  chat_model: llama3.2:3b
+
+# ==================== 记忆配置 ====================
+memory:
+  # 摘要周期 (小时)
+  summary_interval: 6
+  # 批量处理消息数
+  batch_size: 3
+  # 批量超时 (秒)
+  batch_timeout: 30
+  # 嵌入向量维度 (根据模型自动设置)
+  embedding_dim: 384
+
+# ==================== API 配置 ====================
+api:
+  # API 服务端口
+  port: 8082
+  # 跨域配置
+  cors_origins:
+    - "*"
+
+# ==================== 存储配置 ====================
+storage:
+  # 数据目录
+  data_dir: ./data
+  # Weaviate 数据目录
+  weaviate_data: ./data/weaviate
+  # Checkpoint 文件
+  checkpoint_file: ./data/checkpoints.json
+
+# ==================== Agent 配置 ====================
+agents:
+  # OpenClaw 根目录 (通过环境变量 OPENCLAW_DIR 覆盖)
+  openclaw_dir: ~/.openclaw
+  # 默认 Agent
+  default_agent: main
+
+# ==================== 日志配置 ====================
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

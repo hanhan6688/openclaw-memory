@@ -1,0 +1,3594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Agent Memory System - AI Long-term Memory</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+      color: #e0e0e0; min-height: 100vh;
+    }
+
+    .container { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Header */
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 15px 20px; background: #1e1e3f; border-bottom: 1px solid #2a2a4a;
+    }
+    h1 { font-size: 20px; color: #4fc3f7; display: flex; align-items: center; gap: 10px; }
+    .status { display: flex; align-items: center; gap: 15px; }
+    .status-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+    .status-dot.error { background: #f44336; }
+    .status-dot.warning { background: #ff9800; }
+
+    /* Header 按钮 */
+    .header-btn {
+      background: rgba(79, 195, 247, 0.2);
+      border: 1px solid #4fc3f7;
+      color: #4fc3f7;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+      margin-left: 8px;
+    }
+    .header-btn:hover {
+      background: rgba(79, 195, 247, 0.3);
+    }
+
+    /* Main Layout */
+    .main-content { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px; background: #1e1e3f; border-right: 1px solid #2a2a4a;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* Agent Section */
+    .sidebar-section { padding: 15px; border-bottom: 1px solid #2a2a4a; }
+    .sidebar-section h3 {
+      font-size: 12px; color: #888; text-transform: uppercase;
+      margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+    }
+
+    .agent-list { list-style: none; max-height: 150px; overflow-y: auto; }
+    .agent-item {
+      padding: 10px 12px; margin-bottom: 4px; background: #2a2a4a;
+      border-radius: 6px; cursor: pointer; transition: all 0.2s;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .agent-item:hover { background: #3a3a5a; }
+    .agent-item.active {
+      background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
+      color: #1a1a2e;
+    }
+    .agent-badge {
+      font-size: 10px; padding: 2px 6px;
+      background: rgba(79,195,247,0.2); border-radius: 8px;
+    }
+    .agent-item.active .agent-badge { background: rgba(0,0,0,0.2); }
+
+    /* Session List */
+    .session-list-container {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .session-header {
+      padding: 12px 15px; display: flex; justify-content: space-between;
+      align-items: center; border-bottom: 1px solid #2a2a4a;
+    }
+    .session-header h3 { margin: 0; }
+    .sync-btn {
+      padding: 6px 12px; background: #4fc3f7; color: #1a1a2e;
+      border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: all 0.2s;
+    }
+    .sync-btn:hover { background: #29b6f6; }
+    .sync-btn.syncing { background: #666; cursor: wait; }
+
+    .session-list {
+      flex: 1; overflow-y: auto; padding: 10px;
+    }
+    .session-item {
+      padding: 12px; margin-bottom: 4px; background: #2a2a4a;
+      border-radius: 6px; cursor: pointer; transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+    .session-item:hover { background: #3a3a5a; }
+    .session-item.active {
+      background: #3a3a5a; border-left-color: #4fc3f7;
+    }
+    .session-item .title {
+      font-size: 14px; color: #e0e0e0; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .session-item .meta {
+      font-size: 11px; color: #888; display: flex; gap: 10px;
+    }
+    .session-item .message-count {
+      background: #4fc3f7; color: #1a1a2e; padding: 1px 6px;
+      border-radius: 8px; font-size: 10px; font-weight: bold;
+    }
+    .session-group-title {
+      font-size: 11px; color: #888; padding: 8px 5px 4px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid #333; margin-bottom: 5px;
+    }
+
+    /* Center Panel */
+    .center-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Search Section */
+    .search-section { padding: 15px; background: #1e1e3f; border-bottom: 1px solid #2a2a4a; }
+    .search-box { display: flex; gap: 10px; margin-bottom: 10px; }
+    .search-box input {
+      flex: 1; padding: 10px 14px; border: 2px solid #2a2a4a; border-radius: 6px;
+      background: #2a2a4a; color: #e0e0e0; font-size: 14px;
+    }
+    .search-box input:focus { outline: none; border-color: #4fc3f7; }
+    .search-box button {
+      padding: 10px 20px; border: none; border-radius: 6px;
+      background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
+      color: #1a1a2e; font-weight: 600; cursor: pointer;
+    }
+
+    .search-examples { font-size: 12px; color: #666; }
+    .search-examples span { color: #4fc3f7; cursor: pointer; margin-right: 10px; }
+    .search-examples span:hover { text-decoration: underline; }
+
+    /* Tabs */
+    .tabs { display: flex; background: #1e1e3f; border-bottom: 1px solid #2a2a4a; }
+    .tab {
+      padding: 12px 20px; background: transparent; border: none;
+      color: #888; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;
+    }
+    .tab:hover { color: #e0e0e0; }
+    .tab.active { color: #4fc3f7; border-bottom-color: #4fc3f7; }
+
+    /* Content Area */
+    .content-area { flex: 1; overflow-y: auto; padding: 15px; }
+
+    /* Memory List */
+    .memory-item {
+      padding: 15px; margin-bottom: 12px; background: #1e1e3f;
+      border-radius: 8px; border-left: 4px solid #4fc3f7; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .memory-item:hover { transform: translateX(5px); background: #252545; }
+    .memory-item .header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .memory-item .time { font-size: 12px; color: #888; }
+    .memory-item .meta { display: flex; gap: 8px; }
+    .memory-item .badge.score {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 600;
+    }
+    
+    .memory-item .keywords {
+      margin-top: 8px;
+    }
+    .memory-item .keyword-tag {
+      display: inline-block;
+      background: rgba(100, 150, 255, 0.2);
+      color: #8ab4f8;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-right: 4px;
+    }
+    
+    /* 记忆详情模态框 */
+    .memory-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .memory-modal-content {
+      background: #1e1e1e;
+      border-radius: 12px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 80vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .memory-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      border-bottom: 1px solid #333;
+    }
+    .memory-modal-header h3 {
+      margin: 0;
+      color: #fff;
+    }
+    .memory-modal-header button {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .memory-modal-header button:hover {
+      color: #fff;
+    }
+    .memory-modal-body {
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .detail-section {
+      margin-bottom: 20px;
+    }
+    .detail-section h4 {
+      color: #8ab4f8;
+      margin: 0 0 10px 0;
+      font-size: 14px;
+    }
+    .summary-text {
+      color: #e0e0e0;
+      background: #2a2a2a;
+      padding: 12px;
+      border-radius: 8px;
+      line-height: 1.6;
+    }
+    .raw-content {
+      color: #b0b0b0;
+      background: #252525;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .meta-info {
+      display: flex;
+      gap: 20px;
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .memory-item .badge {
+      font-size: 10px; padding: 2px 6px; background: #2a2a4a;
+      border-radius: 4px; color: #81d4fa;
+    }
+    .memory-item .summary { font-size: 14px; line-height: 1.6; color: #c0c0c0; }
+    .memory-item .entities { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
+    .memory-item .entity {
+      font-size: 11px; padding: 2px 8px; background: #2a2a4a;
+      border-radius: 4px; color: #81d4fa;
+    }
+
+    /* Session Messages Panel */
+    .session-messages {
+      background: #151525; border-radius: 8px; padding: 15px;
+    }
+    .session-messages h4 { font-size: 14px; color: #4fc3f7; margin-bottom: 15px; }
+    .session-msg {
+      padding: 12px; margin-bottom: 10px;
+      border-radius: 6px; font-size: 13px; line-height: 1.5;
+    }
+    /* User messages - Blue */
+    .session-msg.user {
+      background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%) !important;
+      border-left: 4px solid #42a5f5 !important;
+      box-shadow: 0 2px 8px rgba(66, 165, 245, 0.3) !important;
+    }
+    /* Assistant messages - Green */
+    .session-msg.assistant {
+      background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%) !important;
+      border-left: 4px solid #66bb6a !important;
+      box-shadow: 0 2px 8px rgba(102, 187, 106, 0.3) !important;
+    }
+    .session-msg .msg-header { display: flex; align-items: center; margin-bottom: 6px; gap: 8px; }
+    .session-msg .role {
+      font-size: 11px; color: #fff;
+      text-transform: uppercase; font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .session-msg .msg-time { font-size: 10px; color: rgba(255,255,255,0.5); margin-left: auto; }
+    .session-msg.user .role { color: #90caf9 !important; }
+    .session-msg.assistant .role { color: #a5d6a7 !important; }
+
+    /* Knowledge Graph */
+    .graph-container { flex: 1; background: #151525; border-radius: 8px; min-height: 400px; }
+    .graph-container svg { width: 100%; height: 100%; }
+
+    .node { cursor: pointer; }
+    .node circle { stroke-width: 2px; }
+    .node text { font-size: 11px; fill: #e0e0e0; pointer-events: none; }
+    .node:hover circle { stroke: #fff; }
+
+    .link { stroke: #444; stroke-opacity: 0.6; }
+    .link.highlighted { stroke: #4fc3f7; stroke-width: 2px; stroke-opacity: 1; }
+
+    /* Right Panel */
+    .right-panel {
+      width: 300px; background: #1e1e3f; border-left: 1px solid #2a2a4a;
+      display: flex; flex-direction: column;
+    }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 15px; }
+    .stat-card {
+      padding: 12px; background: #2a2a4a; border-radius: 6px; text-align: center;
+    }
+    .stat-card .value { font-size: 24px; font-weight: bold; color: #4fc3f7; }
+    .stat-card .label { font-size: 11px; color: #888; margin-top: 4px; }
+
+    /* Entity Cloud */
+    .entity-section { padding: 15px; border-top: 1px solid #2a2a4a; }
+    .entity-section h3 { font-size: 12px; color: #888; margin-bottom: 10px; }
+    .entity-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+    .entity-tag {
+      padding: 4px 10px; background: #2a2a4a; border-radius: 12px;
+      font-size: 12px; display: flex; align-items: center; gap: 4px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .entity-tag:hover { background: #3a3a5a; }
+    .entity-tag .type { color: #4fc3f7; font-size: 10px; }
+    .entity-tag .count {
+      background: #4fc3f7; color: #1a1a2e; padding: 1px 5px;
+      border-radius: 8px; font-size: 10px; font-weight: bold;
+    }
+
+    /* Empty State */
+    .empty-state { text-align: center; padding: 60px 20px; color: #666; }
+    .empty-state svg { width: 60px; height: 60px; margin-bottom: 15px; fill: #333; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: #666; }
+    .loading::after { content: '...'; animation: dots 1.5s steps(4, end) infinite; }
+    @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60%, 100% { content: '...'; } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1e1e3f; }
+    ::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4a4a6a; }
+
+    /* Calendar Picker Styles */
+    .calendar-picker {
+        background: #2a2a4a;
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .calendar-nav {
+        background: #3a3a5a;
+        border: none;
+        color: #e0e0e0;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .calendar-nav:hover { background: #4a4a6a; }
+    .calendar-month-year {
+        color: #4fc3f7;
+        font-weight: 600;
+    }
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+    }
+    .calendar-day-header {
+        text-align: center;
+        font-size: 10px;
+        color: #888;
+        padding: 5px;
+    }
+    .calendar-day {
+        text-align: center;
+        padding: 8px 4px;
+        font-size: 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .calendar-day:hover { background: #3a3a5a; }
+    .calendar-day.selected {
+        background: #4fc3f7;
+        color: #1a1a2e;
+        font-weight: bold;
+    }
+    .calendar-day.has-memory::after {
+        content: '';
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 6px;
+        background: #4caf50;
+        border-radius: 50%;
+        box-shadow: 0 0 4px #4caf50;
+    }
+    .calendar-day.today {
+      background: rgba(79, 195, 247, 0.2);
+      border: 1px solid #4fc3f7;
+    }
+    .calendar-day.selected.has-memory::after {
+        background: #1a1a2e;
+    }
+    .calendar-day.other-month {
+        color: #555;
+    }
+    .calendar-day.other-month.has-memory::after {
+        background: #4caf50;
+    }
+    .date-range-display {
+        background: #1e1e3f;
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin-top: 10px;
+        font-size: 12px;
+        color: #4fc3f7;
+        text-align: center;
+    }
+
+    /* 知识图谱操作按钮 */
+    .kg-btn {
+      padding: 6px 12px;
+      background: #4fc3f7;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .kg-btn:hover { background: #29b6f6; }
+
+    /* 危险按钮 */
+    .danger-btn {
+      background: rgba(244, 67, 54, 0.2) !important;
+      border: 1px solid #f44336 !important;
+      color: #f44336 !important;
+    }
+    .danger-btn:hover {
+      background: rgba(244, 67, 54, 0.4) !important;
+    }
+
+    /* 右键菜单 */
+    .context-menu {
+      position: fixed;
+      background: #2a2a4a;
+      border: 1px solid #4fc3f7;
+      border-radius: 6px;
+      padding: 4px 0;
+      min-width: 120px;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .context-menu-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #e0e0e0;
+      transition: background 0.2s;
+    }
+    .context-menu-item:hover { background: #3a3a5a; }
+
+    /* 对话框 */
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1001;
+    }
+    .dialog {
+      background: #1e1e3f;
+      border-radius: 12px;
+      padding: 20px;
+      min-width: 320px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .dialog h3 {
+      margin: 0 0 16px 0;
+      color: #4fc3f7;
+      font-size: 16px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: #888;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #3a3a5a;
+      border-radius: 6px;
+      background: #2a2a4a;
+      color: #e0e0e0;
+      font-size: 14px;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #4fc3f7;
+    }
+    .dialog-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .dialog-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .dialog-btn.cancel {
+      background: #3a3a5a;
+      color: #e0e0e0;
+    }
+    .dialog-btn.cancel:hover { background: #4a4a6a; }
+    .dialog-btn.confirm {
+      background: #4fc3f7;
+      color: #1a1a2e;
+    }
+    .dialog-btn.confirm:hover { background: #29b6f6; }
+  
+    /* 知识图谱全屏模式 */
+    .graph-fullscreen {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
+      background: #0a0a15 !important;
+      border-radius: 0 !important;
+    }
+    .graph-fullscreen-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 15px 20px;
+      background: rgba(30, 30, 63, 0.95);
+      border-bottom: 1px solid #2a2a4a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10000;
+    }
+    .graph-fullscreen-header h2 {
+      color: #4fc3f7;
+      font-size: 18px;
+      margin: 0;
+    }
+    .graph-fullscreen-content {
+      position: fixed;
+      top: 60px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    .fullscreen-btn {
+      background: transparent;
+      border: 1px solid #4fc3f7;
+      color: #4fc3f7;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .fullscreen-btn:hover {
+      background: #4fc3f7;
+      color: #1a1a2e;
+    }
+    .exit-fullscreen-btn {
+      background: #f44336;
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .exit-fullscreen-btn:hover {
+      background: #d32f2f;
+    }
+
+    /* 知识图谱全屏按钮 - 右上角放大箭头 */
+    .graph-fullscreen-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 36px;
+      height: 36px;
+      background: rgba(30, 30, 63, 0.9);
+      border: 1px solid #4fc3f7;
+      border-radius: 6px;
+      color: #4fc3f7;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 100;
+    }
+    .graph-fullscreen-btn:hover {
+      background: #4fc3f7;
+      color: #1a1a2e;
+      transform: scale(1.1);
+    }
+    .graph-fullscreen-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 配置页面样式 */
+    .config-container {
+      padding: 20px;
+    }
+    .config-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .config-header h3 {
+      margin: 0;
+      color: #4fc3f7;
+      font-size: 18px;
+    }
+    .config-workspace-path {
+      font-size: 12px;
+      color: #888;
+      background: #2a2a4a;
+      padding: 6px 12px;
+      border-radius: 4px;
+    }
+    .config-files {
+      display: grid;
+      gap: 16px;
+    }
+    .config-file-card {
+      background: #1e1e3f;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #2a2a4a;
+      transition: all 0.2s;
+    }
+    .config-file-card:hover {
+      border-color: #4fc3f7;
+      transform: translateY(-2px);
+    }
+    .config-file-card.config-file-exists {
+      border-left: 4px solid #4caf50;
+    }
+    .config-file-card.config-file-empty {
+      border-left: 4px solid #ff9800;
+    }
+    .config-file-header {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 12px;
+    }
+    .config-file-icon {
+      font-size: 32px;
+      width: 50px;
+      height: 50px;
+      background: #2a2a4a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .config-file-info {
+      flex: 1;
+    }
+    .config-file-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e0e0e0;
+    }
+    .config-file-name {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .config-file-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .config-file-exists .config-file-status {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+    .config-file-empty .config-file-status {
+      background: rgba(255, 152, 0, 0.2);
+      color: #ff9800;
+    }
+    .config-file-desc {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.6;
+      margin-bottom: 15px;
+    }
+    .config-file-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .config-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      background: #3a3a5a;
+      color: #e0e0e0;
+    }
+    .config-btn:hover {
+      background: #4a4a6a;
+    }
+    .config-btn-primary {
+      background: #4fc3f7;
+      color: #1a1a2e;
+    }
+    .config-btn-primary:hover {
+      background: #29b6f6;
+    }
+    .config-btn-danger {
+      background: transparent;
+      border: 1px solid #f44336;
+      color: #f44336;
+    }
+    .config-btn-danger:hover {
+      background: rgba(244, 67, 54, 0.1);
+    }
+    .config-file-meta {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* 配置编辑器样式 */
+    .config-editor-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 180px);
+    }
+    .config-editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 0;
+      border-bottom: 1px solid #2a2a4a;
+      margin-bottom: 15px;
+    }
+    .config-editor-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e0e0;
+    }
+    .config-editor-icon {
+      font-size: 24px;
+    }
+    .config-editor-desc {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 15px;
+      padding: 10px;
+      background: #2a2a4a;
+      border-radius: 6px;
+    }
+    .config-editor-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .config-editor {
+      flex: 1;
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #2a2a4a;
+      border-radius: 8px;
+      background: #151525;
+      color: #e0e0e0;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: none;
+    }
+    .config-editor:focus {
+      outline: none;
+      border-color: #4fc3f7;
+    }
+    .config-editor-footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    /* Markdown 渲染样式 */
+    .markdown-content {
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .markdown-content h1, .markdown-content h2, .markdown-content h3,
+    .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+      margin: 16px 0 8px 0;
+      color: #4fc3f7;
+      font-weight: 600;
+    }
+    .markdown-content h1 { font-size: 1.5em; border-bottom: 1px solid #3a3a5a; padding-bottom: 8px; }
+    .markdown-content h2 { font-size: 1.3em; }
+    .markdown-content h3 { font-size: 1.1em; }
+    .markdown-content p { margin: 8px 0; }
+    .markdown-content ul, .markdown-content ol {
+      margin: 8px 0;
+      padding-left: 24px;
+    }
+    .markdown-content li { margin: 4px 0; }
+    .markdown-content code {
+      background: #2a2a4a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      color: #f8f8f2;
+    }
+    .markdown-content pre {
+      background: #1a1a2e;
+      border: 1px solid #3a3a5a;
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .markdown-content pre code {
+      background: transparent;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .markdown-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+    .markdown-content th, .markdown-content td {
+      border: 1px solid #3a3a5a;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .markdown-content th {
+      background: #2a2a4a;
+      color: #4fc3f7;
+      font-weight: 600;
+    }
+    .markdown-content tr:nth-child(even) {
+      background: rgba(42, 42, 74, 0.3);
+    }
+    .markdown-content blockquote {
+      border-left: 4px solid #4fc3f7;
+      margin: 12px 0;
+      padding: 8px 16px;
+      background: rgba(79, 195, 247, 0.1);
+      color: #aaa;
+    }
+    .markdown-content hr {
+      border: none;
+      border-top: 1px solid #3a3a5a;
+      margin: 16px 0;
+    }
+    .markdown-content a {
+      color: #4fc3f7;
+      text-decoration: none;
+    }
+    .markdown-content a:hover {
+      text-decoration: underline;
+    }
+    .markdown-content img {
+      max-width: 100%;
+      border-radius: 8px;
+    }
+    .markdown-content strong { color: #fff; }
+    .markdown-content em { color: #ccc; }
+
+    /* 会话消息中的 Markdown */
+    .session-msg .markdown-content {
+      color: inherit;
+    }
+    .session-msg.user .markdown-content th {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .session-msg.assistant .markdown-content th {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* 消息保存按钮 */
+    .msg-save-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.5);
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0;
+      transition: all 0.2s;
+    }
+    .session-msg:hover .msg-save-btn {
+      opacity: 1;
+    }
+    .msg-save-btn:hover {
+      background: rgba(79, 195, 247, 0.2);
+      border-color: #4fc3f7;
+      color: #4fc3f7;
+    }
+    .msg-save-btn.saved {
+      background: rgba(76, 175, 80, 0.2);
+      border-color: #4caf50;
+      color: #4caf50;
+      opacity: 1;
+    }
+    .msg-save-btn.saving {
+      opacity: 1;
+      color: #ff9800;
+    }
+    .msg-save-btn.skipped {
+      opacity: 1;
+      color: #666;
+      cursor: default;
+    }
+
+    /* 消息摘要区域 */
+    .msg-summary {
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+      font-size: 12px;
+      color: #aaa;
+      border-left: 3px solid #4fc3f7;
+    }
+    .msg-summary .summary-label {
+      color: #4fc3f7;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .msg-summary .quality-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-left: 8px;
+    }
+    .msg-summary .quality-badge.high { background: rgba(76,175,80,0.2); color: #4caf50; }
+    .msg-summary .quality-badge.medium { background: rgba(255,152,0,0.2); color: #ff9800; }
+    .msg-summary .quality-badge.low { background: rgba(244,67,54,0.2); color: #f44336; }
+
+    /* 知识库样式 */
+    .kb-container { padding: 15px; }
+    .kb-header { 
+      display: flex; justify-content: space-between; align-items: center; 
+      margin-bottom: 15px;
+    }
+    .kb-header h3 { margin: 0; color: #4fc3f7; }
+    .kb-stats { color: #888; font-size: 13px; }
+    
+    .kb-upload-section { margin-bottom: 15px; }
+    .kb-upload-box {
+      border: 2px dashed #2a2a4a;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .kb-upload-box:hover { border-color: #4fc3f7; }
+    .kb-upload-drag { cursor: pointer; padding: 20px; }
+    
+    .kb-doc-list { margin-top: 15px; }
+    .kb-doc-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; background: #2a2a4a; border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .kb-doc-item:hover { background: #3a3a5a; }
+    .kb-doc-title { font-weight: 500; margin-bottom: 4px; }
+    .kb-doc-meta { font-size: 12px; color: #888; }
+    .kb-doc-meta span { margin-right: 15px; }
+    .kb-doc-delete {
+      background: none; border: none; cursor: pointer; font-size: 16px;
+      padding: 4px 8px; border-radius: 4px;
+    }
+    .kb-doc-delete:hover { background: rgba(244,67,54,0.2); }
+    
+    .kb-result-item {
+      background: #2a2a4a; border-radius: 6px; padding: 12px; margin-bottom: 10px;
+    }
+    .kb-result-title { font-weight: 500; color: #4fc3f7; margin-bottom: 4px; }
+    .kb-result-source { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .kb-chunk {
+      background: #1e1e3f; padding: 10px; border-radius: 4px; margin-top: 8px;
+      font-size: 13px; line-height: 1.5;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧠 Agent Memory System</h1>
+      <div class="status">
+        <div class="status-item">
+          <span class="status-dot" id="serverDot"></span>
+          <span id="serverStatus">Server</span>
+        </div>
+        <div class="status-item">
+          <span class="status-dot" id="aiDot"></span>
+          <span id="aiStatus">AI</span>
+        </div>
+        <div class="status-item" style="margin-left: 20px;">
+          <button class="header-btn" onclick="exportAllData()" title="导出所有数据">📤 导出</button>
+          <button class="header-btn" onclick="document.getElementById('importFile').click()" title="导入数据">📥 导入</button>
+          <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importAllData(event)">
+        </div>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-section">
+          <h3>🤖 Agents</h3>
+          <ul class="agent-list" id="agentList">
+            <li style="padding: 10px; text-align: center; color: #666;">Loading...</li>
+          </ul>
+        </div>
+
+        <div class="session-list-container">
+          <div class="session-header">
+            <h3 style="font-size: 12px; color: #888; text-transform: uppercase;">📜 会话历史</h3>
+          </div>
+          <div class="session-list" id="sessionList">
+            <div style="padding: 20px; text-align: center; color: #666; font-size: 13px;">
+              选择 Agent 查看会话
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>📅 时间筛选</h3>
+          <div class="calendar-picker" id="calendarPicker">
+            <div class="calendar-header">
+              <button class="calendar-nav" onclick="prevMonth()">◀</button>
+              <span class="calendar-month-year" id="calendarTitle">2024年1月</span>
+              <button class="calendar-nav" onclick="nextMonth()">▶</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="date-range-display" id="dateRangeDisplay">选择日期</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Panel -->
+      <div class="center-panel">
+        <div class="search-section">
+          <div class="search-box">
+            <input type="text" id="searchInput" placeholder="搜索记忆... 例如 '上周说的那个广告商'">
+            <button onclick="searchMemories()">搜索</button>
+          </div>
+          <div class="search-examples">
+            示例:
+            <span onclick="quickSearch('上周说的那个广告商')">上周说的那个广告商</span>
+            <span onclick="quickSearch('Docker 配置')">Docker 配置</span>
+            <span onclick="quickSearch('抖音投流数据')">抖音投流数据</span>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('sessions', event)">📜 会话详情</button>
+          <button class="tab" onclick="switchTab('graph', event)">🕸️ 知识图谱</button>
+          <button class="tab" onclick="switchTab('config', event)">⚙️ 配置</button>
+          <button class="tab" onclick="switchTab('memories', event)">💭 记忆</button>
+          <button class="tab" onclick="switchTab('knowledgebase', event)">📚 知识库</button>
+        </div>
+
+        <div class="content-area" id="contentArea">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <p>从左侧选择一个会话查看详情</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div class="right-panel">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="value" id="totalMemories">0</div>
+            <div class="label">记忆</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="totalEntities">0</div>
+            <div class="label">实体</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="totalSessions">0</div>
+            <div class="label">会话</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="totalRelations">0</div>
+            <div class="label">关系</div>
+          </div>
+        </div>
+
+        <div class="entity-section">
+          <h3>🏷️ 热门实体</h3>
+          <div class="entity-cloud" id="entityList">
+            <span class="entity-tag">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:8082';
+    let currentAgent = null;
+    let currentSession = null;
+    let currentTab = 'sessions';
+    let timeFilter = 'week';
+    let selectedDate = null;  // 日历选择的日期
+    let memoryDates = new Set();  // 有记忆的日期集合
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await checkHealth();
+      await loadAgents();
+      renderCalendar();
+      document.getElementById('searchInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') searchMemories();
+      });
+    });
+
+    async function checkHealth() {
+      try {
+        const r = await fetch(`${API}/health`);
+        const data = await r.json();
+        document.getElementById('serverDot').classList.remove('error');
+        document.getElementById('serverStatus').textContent = 'Server OK';
+        if (data.ai) {
+          document.getElementById('aiDot').classList.remove('error');
+          document.getElementById('aiStatus').textContent = `AI: ${data.ai_models?.length || 0} models`;
+        } else {
+          document.getElementById('aiDot').classList.add('warning');
+          document.getElementById('aiStatus').textContent = 'AI Unavailable';
+        }
+      } catch {
+        document.getElementById('serverDot').classList.add('error');
+        document.getElementById('serverStatus').textContent = 'Server Error';
+      }
+    }
+
+    async function loadAgents() {
+      try {
+        const r = await fetch(`${API}/agents`);
+        const agents = await r.json();
+        const list = document.getElementById('agentList');
+        if (!agents.length) {
+          list.innerHTML = '<li style="padding: 10px; text-align: center; color: #666;">No agents found</li>';
+          return;
+        }
+        list.innerHTML = agents.map(a => `
+          <li class="agent-item" onclick="selectAgent('${a.name}')">
+            <span>${a.name}</span>
+            <span class="agent-badge">${a.session_count || 0}</span>
+          </li>
+        `).join('');
+
+        // 自动选择第一个agent
+        if (agents.length > 0) {
+          await selectAgent(agents[0].name);
+        }
+      } catch (e) {
+        console.error('loadAgents error:', e);
+        document.getElementById('agentList').innerHTML = '<li style="padding: 10px; text-align: center; color: #f44336;">Load failed</li>';
+      }
+    }
+
+    async function selectAgent(name) {
+      currentAgent = name;
+      currentSession = null;
+      selectedDate = null; // 重置日期选择
+      
+      // 更新agent列表的active状态
+      document.querySelectorAll('.agent-item').forEach(el => {
+        el.classList.remove('active');
+        if (el.textContent.includes(name)) {
+          el.classList.add('active');
+        }
+      });
+      
+      // 重置tab到会话详情
+      currentTab = 'sessions';
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.tab').classList.add('active');
+      
+      // 重置日历显示
+      updateDateRangeDisplay();
+      
+      // 并行加载数据（loadSessions 完成后会自动调用 loadMemoryDates）
+      await Promise.all([
+        loadSessions(name),
+        loadMemories(name),
+        loadStats(name),
+        loadEntities(name)
+      ]);
+    }
+
+    // 缓存所有会话数据
+    let allSessions = [];
+
+    async function loadSessions(agent, filterDate = null) {
+      if (!agent) return;
+      const list = document.getElementById('sessionList');
+
+      // 显示加载提示
+      list.innerHTML = '<div class="loading">加载会话列表</div>';
+
+      try {
+        const r = await fetch(`${API}/agents/${agent}/sessions`);
+        if (!r.ok) throw new Error('Sessions API error');
+        const sessions = await r.json();
+
+        if (!sessions || !sessions.length) {
+          list.innerHTML = '<div style="padding: 20px; text-align: center; color: #666; font-size: 13px;">暂无会话</div>';
+          document.getElementById('totalSessions').textContent = '0';
+          allSessions = [];
+          return;
+        }
+
+        // 缓存所有会话
+        allSessions = sessions;
+
+        // 更新日历绿点（包含会话日期）
+        loadMemoryDates(agent);
+
+        // 渲染会话列表
+        renderSessionList(sessions, filterDate);
+        document.getElementById('totalSessions').textContent = sessions.length;
+      } catch (e) {
+        console.error('loadSessions error:', e);
+        list.innerHTML = '<div style="padding: 20px; text-align: center; color: #f44336;">加载失败</div>';
+      }
+    }
+
+    function renderSessionList(sessions, filterDate = null) {
+      const list = document.getElementById('sessionList');
+      
+      // 按日期分组（使用 YYYY-MM-DD 格式）
+      const groups = {};
+      
+      sessions.forEach(s => {
+        const date = new Date(s.updatedAt);
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        
+        if (!groups[dateStr]) {
+          groups[dateStr] = [];
+        }
+        groups[dateStr].push(s);
+      });
+
+      // 如果有筛选日期，只显示该日期的会话
+      if (filterDate) {
+        const filterStr = `${filterDate.getFullYear()}-${String(filterDate.getMonth() + 1).padStart(2, '0')}-${String(filterDate.getDate()).padStart(2, '0')}`;
+        const filteredSessions = groups[filterStr] || [];
+        
+        if (filteredSessions.length === 0) {
+          list.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; font-size: 13px;">
+            该日期暂无会话
+            <div style="margin-top: 10px;">
+              <button class="sync-btn" onclick="clearDateFilter()">显示全部</button>
+            </div>
+          </div>`;
+          return;
+        }
+
+        const dateLabel = getDateLabel(filterDate);
+        let html = `
+          <div class="session-group-title" style="background: #4fc3f7; color: #1a1a2e;">
+            ${dateLabel} (${filteredSessions.length})
+            <span style="float: right; cursor: pointer; font-size: 11px;" onclick="clearDateFilter()">✕ 清除筛选</span>
+          </div>
+        `;
+        html += filteredSessions.map(s => renderSessionItem(s)).join('');
+        list.innerHTML = html;
+        return;
+      }
+
+      // 没有筛选，显示所有会话按日期分组
+      const sortedDates = Object.keys(groups).sort((a, b) => new Date(b) - new Date(a));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+      let html = '';
+      let expandedCount = 0;
+
+      sortedDates.forEach((dateStr, index) => {
+        const sessionsOnDate = groups[dateStr];
+        const dateObj = new Date(dateStr);
+        const isToday = dateStr === todayStr;
+        const isYesterday = dateStr === yesterdayStr;
+        
+        let label = getDateLabel(dateObj);
+        let isExpanded = isToday || expandedCount < 1; // 今天默认展开，其他折叠
+
+        html += `<div class="session-group-title" style="cursor: pointer;" onclick="toggleSessionGroup(this)">
+          ${label} (${sessionsOnDate.length}) ${isExpanded ? '▲' : '▼'}
+        </div>`;
+        html += `<div style="${isExpanded ? '' : 'display: none;'}">${sessionsOnDate.map(s => renderSessionItem(s)).join('')}</div>`;
+        
+        if (isExpanded) expandedCount++;
+      });
+
+      list.innerHTML = html;
+    }
+
+    function getDateLabel(date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // 创建副本，不修改传入的对象
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
+      
+      if (checkDate.getTime() === today.getTime()) return '今天';
+      if (checkDate.getTime() === yesterday.getTime()) return '昨天';
+      
+      return `${checkDate.getMonth() + 1}月${checkDate.getDate()}日`;
+    }
+
+    function toggleSessionGroup(el) {
+      const content = el.nextElementSibling;
+      if (content) {
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? 'block' : 'none';
+        el.innerHTML = el.innerHTML.replace(isHidden ? '▼' : '▲', isHidden ? '▲' : '▼');
+      }
+    }
+
+    function clearDateFilter() {
+      selectedDate = null;
+      updateDateRangeDisplay();
+      renderCalendar();
+      renderSessionList(allSessions, null);
+    }
+
+    function renderSessionItem(s) {
+      const time = new Date(s.updatedAt);
+      const timeStr = time.getHours().toString().padStart(2, '0') + ':' + time.getMinutes().toString().padStart(2, '0');
+      return `
+        <div class="session-item ${currentSession === s.id ? 'active' : ''}" onclick="selectSession('${s.id}', event)">
+          <div class="title">${escapeHtml(s.title || '新对话')}</div>
+          <div class="meta">
+            <span>${timeStr}</span>
+            <span class="message-count">${s.messageCount || 0}条</span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function selectSession(sessionId, evt) {
+      currentSession = sessionId;
+      
+      // 更新session-item的active状态
+      document.querySelectorAll('.session-item').forEach(el => {
+        el.classList.remove('active');
+      });
+      if (evt && evt.target) {
+        evt.target.closest('.session-item')?.classList.add('active');
+      }
+
+      // 设置当前 tab 为 sessions（不调用 switchTab 避免循环）
+      currentTab = 'sessions';
+
+      // 更新 Tab 按钮状态
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        if ((t.textContent || '').includes('会话')) {
+          t.classList.add('active');
+        }
+      });
+
+      const contentArea = document.getElementById('contentArea');
+      
+      // 显示加载提示
+      contentArea.innerHTML = '<div class="loading">加载会话消息</div>';
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/sessions/${sessionId}/messages`);
+        if (!r.ok) throw new Error('Messages API error');
+        const data = await r.json();
+
+        if (!data.messages?.length) {
+          contentArea.innerHTML = '<div class="empty-state"><p>暂无消息</p></div>';
+          return;
+        }
+
+        // 缓存消息数据
+        currentSessionMessages = data.messages;
+
+        contentArea.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="margin: 0;">📜 ${data.messageCount} 条消息</h4>
+            <button class="sync-btn" id="syncBtn" onclick="saveSessionToMemory()" title="保存会话到记忆">💾 保存到记忆</button>
+          </div>
+          <div class="session-messages">
+            ${data.messages.map((m, idx) => `
+              <div class="session-msg ${m.role}" data-msg-idx="${idx}">
+                <div class="msg-header">
+                  <div class="role">${m.role === 'user' ? '👤 用户' : '🤖 助手'}</div>
+                  <div class="msg-time">${m.timestamp ? formatMsgTime(m.timestamp) : ''}</div>
+                  <button class="msg-save-btn" onclick="saveMessageToMemory(${idx}, '${m.role}')" title="保存此消息到记忆">💾</button>
+                </div>
+                <div class="markdown-content">${renderMarkdown(m.content)}</div>
+                <div class="msg-summary" id="msg-summary-${idx}" style="display: none;"></div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        // 高亮代码块
+        document.querySelectorAll('.markdown-content pre code').forEach(block => {
+          hljs.highlightElement(block);
+        });
+      } catch (e) {
+        console.error('selectSession error:', e);
+        contentArea.innerHTML = '<div class="empty-state"><p>⚠️ 无法加载会话消息</p></div>';
+      }
+    }
+
+    // 缓存当前会话消息
+    let currentSessionMessages = [];
+
+    // 保存单条消息到记忆
+    async function saveMessageToMemory(msgIdx, role) {
+      if (!currentAgent || !currentSession) {
+        alert('请先选择会话');
+        return;
+      }
+
+      const msg = currentSessionMessages[msgIdx];
+      if (!msg) return;
+
+      const btn = document.querySelector(`[data-msg-idx="${msgIdx}"] .msg-save-btn`);
+      if (btn.classList.contains('saved') || btn.classList.contains('saving')) return;
+
+      btn.classList.add('saving');
+      btn.textContent = '⏳';
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/memories/save-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: msg.content,
+            role: role,
+            timestamp: msg.timestamp,
+            session_id: currentSession
+          })
+        });
+        const data = await r.json();
+
+        btn.classList.remove('saving');
+
+        if (data.skipped) {
+          // 质量太低，跳过
+          btn.classList.add('skipped');
+          btn.textContent = '⏭️';
+          btn.title = data.reason || '质量过低，已跳过';
+        } else if (data.success) {
+          // 保存成功
+          btn.classList.add('saved');
+          btn.textContent = '✅';
+          btn.title = '已保存';
+
+          // 显示摘要
+          const summaryDiv = document.getElementById(`msg-summary-${msgIdx}`);
+          if (summaryDiv && data.summary) {
+            summaryDiv.style.display = 'block';
+            summaryDiv.innerHTML = `
+              <div class="summary-label">📝 摘要 <span class="quality-badge ${data.quality || 'medium'}">${data.quality || 'medium'}</span></div>
+              <div>${escapeHtml(data.summary)}</div>
+            `;
+          }
+
+          await loadStats(currentAgent);
+        } else {
+          throw new Error(data.error || '保存失败');
+        }
+      } catch (e) {
+        btn.classList.remove('saving');
+        btn.textContent = '💾';
+        alert('保存失败: ' + e.message);
+      }
+    }
+
+    // 保存整个会话到记忆
+    async function saveSessionToMemory() {
+      if (!currentAgent || !currentSession) {
+        alert('请先选择会话');
+        return;
+      }
+
+      const btn = document.getElementById('syncBtn');
+      btn.textContent = '处理中...';
+      btn.disabled = true;
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/sessions/${currentSession}/save-to-memory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await r.json();
+
+        btn.textContent = '💾 保存到记忆';
+        btn.disabled = false;
+
+        if (data.success) {
+          // 更新每条消息的状态
+          if (data.results) {
+            data.results.forEach((result, idx) => {
+              const msgBtn = document.querySelector(`[data-msg-idx="${idx}"] .msg-save-btn`);
+              if (msgBtn) {
+                if (result.skipped) {
+                  msgBtn.classList.add('skipped');
+                  msgBtn.textContent = '⏭️';
+                  msgBtn.title = result.reason || '质量过低';
+                } else if (result.saved) {
+                  msgBtn.classList.add('saved');
+                  msgBtn.textContent = '✅';
+                  msgBtn.title = '已保存';
+                }
+              }
+            });
+          }
+
+          alert(`保存完成！
+- 保存: ${data.saved || 0} 条
+- 跳过: ${data.skipped || 0} 条 (低质量)
+- 总计: ${data.total || 0} 条`);
+
+          await loadStats(currentAgent);
+        } else {
+          throw new Error(data.error || '保存失败');
+        }
+      } catch (e) {
+        btn.textContent = '💾 保存到记忆';
+        btn.disabled = false;
+        alert('保存失败: ' + e.message);
+      }
+    }
+
+    async function syncSessions() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+
+      const btn = document.getElementById('syncBtn');
+      btn.textContent = '同步中...';
+      btn.classList.add('syncing');
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/sessions/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ extractEntities: true })
+        });
+        const data = await r.json();
+        btn.textContent = '同步';
+        btn.classList.remove('syncing');
+
+        const msg = `同步完成！
+- 处理会话: ${data.sessionsProcessed || 0} 个
+- 导入记忆: ${data.totalImported || 0} 条
+- 提取实体: ${data.entitiesExtracted || 0} 个
+- 提取关系: ${data.relationsExtracted || 0} 个`;
+        alert(msg);
+
+        await loadMemories(currentAgent);
+        await loadStats(currentAgent);
+        await loadEntities(currentAgent);
+      } catch (e) {
+        btn.textContent = '同步';
+        btn.classList.remove('syncing');
+        console.error('syncSessions error:', e);
+        alert('同步失败: ' + e.message);
+      }
+    }
+
+    async function extractEntities() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+
+      const btn = document.getElementById('extractBtn');
+      btn.textContent = '提取中...';
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/kg/extract-from-memories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limit: 50 })
+        });
+        const data = await r.json();
+        btn.textContent = '🧠 提取';
+
+        if (data.status === 'no_memories') {
+          alert('没有记忆可处理，请先同步会话');
+          return;
+        }
+
+        alert(`提取完成！
+- 处理记忆: ${data.memoriesProcessed || 0} 条
+- 提取实体: ${data.entitiesExtracted || 0} 个
+- 提取关系: ${data.relationsExtracted || 0} 个`);
+
+        await loadStats(currentAgent);
+        await loadEntities(currentAgent);
+        if (currentTab === 'graph') {
+          loadKnowledgeGraph(currentAgent);
+        }
+      } catch (e) {
+        btn.textContent = '🧠 提取';
+        console.error('extractEntities error:', e);
+        alert('提取失败: ' + e.message);
+      }
+    }
+
+    async function clearKnowledgeGraph() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+
+      // 确认对话框
+      if (!confirm('⚠️ 确定要清空知识图谱吗？\n\n这将删除所有实体和关系数据，操作不可恢复！')) {
+        return;
+      }
+
+      // 二次确认
+      if (!confirm('🚨 最后确认：真的要清空所有知识图谱数据吗？')) {
+        return;
+      }
+
+      const btn = document.getElementById('clearKgBtn');
+      btn.textContent = '清空中...';
+      btn.disabled = true;
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/kg/clear`, {
+          method: 'DELETE'
+        });
+        const data = await r.json();
+
+        btn.textContent = '🗑️ 清空';
+        btn.disabled = false;
+
+        if (data.success) {
+          alert(`✅ 知识图谱已清空！\n\n删除：\n- ${data.deleted.entities || 0} 个实体\n- ${data.deleted.relations || 0} 条关系`);
+
+          // 刷新显示
+          await loadStats(currentAgent);
+          await loadEntities(currentAgent);
+          if (currentTab === 'graph') {
+            loadKnowledgeGraph(currentAgent);
+          }
+        } else {
+          alert('清空失败: ' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        btn.textContent = '🗑️ 清空';
+        btn.disabled = false;
+        console.error('clearKnowledgeGraph error:', e);
+        alert('清空失败: ' + e.message);
+      }
+    }
+
+    async function parseWorkspace() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+
+      const btn = document.getElementById('workspaceBtn');
+      btn.textContent = '解析中...';
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/workspace/parse`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maxFiles: 15, storeToKg: true })
+        });
+        const data = await r.json();
+        btn.textContent = '📁 WS';
+
+        if (data.status === 'not_found') {
+          alert('Workspace 未找到');
+          return;
+        }
+
+        alert(`Workspace 解析完成！
+- 处理文件: ${data.filesProcessed || 0} 个
+- 提取实体: ${data.entities?.length || 0} 个
+- 提取关系: ${data.relations?.length || 0} 个
+- 存储实体: ${data.stored_entities || 0} 个
+- 存储关系: ${data.stored_relations || 0} 个`);
+
+        await loadStats(currentAgent);
+        await loadEntities(currentAgent);
+        if (currentTab === 'graph') {
+          loadKnowledgeGraph(currentAgent);
+        }
+      } catch (e) {
+        btn.textContent = '📁 WS';
+        console.error('parseWorkspace error:', e);
+        alert('解析失败: ' + e.message);
+      }
+    }
+
+    function switchTab(tab, evt) {
+      currentTab = tab;
+
+      // 更新 Tab 按钮状态
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        const text = t.textContent || '';
+        if (tab === 'memories' && text.includes('记忆')) {
+          t.classList.add('active');
+        } else if (tab === 'graph' && text.includes('知识图谱')) {
+          t.classList.add('active');
+        } else if (tab === 'config' && text.includes('配置')) {
+          t.classList.add('active');
+        } else if (tab === 'sessions' && text.includes('会话')) {
+          t.classList.add('active');
+        } else if (tab === 'knowledgebase' && text.includes('知识库')) {
+          t.classList.add('active');
+        }
+      });
+
+      // 如果是事件触发，确保激活正确的按钮
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      }
+
+      if (tab === 'graph') {
+        loadKnowledgeGraph(currentAgent);
+      } else if (tab === 'config') {
+        loadConfig(currentAgent);
+      } else if (tab === 'memories') {
+        loadMemories(currentAgent);
+      } else if (tab === 'sessions') {
+        // 如果有当前会话，重新加载会话内容
+        if (currentSession) {
+          // 重新加载当前会话的消息
+          selectSession(currentSession);
+        } else {
+          document.getElementById('contentArea').innerHTML = `
+            <div class="empty-state">
+              <p>从左侧选择一个会话查看详情</p>
+            </div>
+          `;
+        }
+      } else if (tab === 'knowledgebase') {
+        loadKnowledgeBase();
+      }
+    }
+
+    // ========== 配置页面 ==========
+    let configFilesData = null;  // 缓存配置文件数据
+    let currentEditFile = null;  // 当前编辑的文件
+
+    async function loadConfig(agent) {
+      if (!agent) return;
+
+      const contentArea = document.getElementById('contentArea');
+      contentArea.innerHTML = '<div class="loading">加载配置</div>';
+
+      try {
+        const r = await fetch(`${API}/agents/${agent}/config/files`);
+        const data = await r.json();
+
+        if (data.error === 'workspace_not_found') {
+          contentArea.innerHTML = `
+            <div class="empty-state">
+              <p>⚠️ Agent 的 workspace 未找到</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                请确保 Agent 的 workspace 目录存在
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        configFilesData = data;
+        renderConfigPage(data);
+      } catch (e) {
+        console.error('loadConfig error:', e);
+        contentArea.innerHTML = '<div class="empty-state"><p>⚠️ 无法加载配置</p></div>';
+      }
+    }
+
+    function renderConfigPage(data) {
+      const contentArea = document.getElementById('contentArea');
+
+      let html = `
+        <div class="config-container">
+          <div class="config-header">
+            <h3>⚙️ Agent 配置</h3>
+            <div class="config-workspace-path">Workspace: ${escapeHtml(data.workspace_path || '')}</div>
+          </div>
+          <div class="config-files">
+      `;
+
+      for (const file of data.files) {
+        const statusClass = file.exists ? 'config-file-exists' : 'config-file-empty';
+        const statusText = file.exists ? '已配置' : '未配置';
+
+        html += `
+          <div class="config-file-card ${statusClass}">
+            <div class="config-file-header">
+              <div class="config-file-icon">${file.icon}</div>
+              <div class="config-file-info">
+                <div class="config-file-title">${file.title}</div>
+                <div class="config-file-name">${file.filename}</div>
+              </div>
+              <div class="config-file-status">${statusText}</div>
+            </div>
+            <div class="config-file-desc">${file.description}</div>
+            <div class="config-file-actions">
+              <button class="config-btn" onclick="editConfigFile('${file.filename}')">
+                ${file.exists ? '✏️ 编辑' : '➕ 创建'}
+              </button>
+              ${file.exists ? `<button class="config-btn config-btn-danger" onclick="resetConfigFile('${file.filename}')">🗑️ 重置</button>` : ''}
+            </div>
+            ${file.modified ? `<div class="config-file-meta">最后修改: ${formatTime(file.modified)}</div>` : ''}
+          </div>
+        `;
+      }
+
+      html += `
+          </div>
+        </div>
+      `;
+
+      contentArea.innerHTML = html;
+    }
+
+    async function editConfigFile(filename) {
+      if (!currentAgent) return;
+
+      currentEditFile = filename;
+      const contentArea = document.getElementById('contentArea');
+
+      contentArea.innerHTML = '<div class="loading">加载文件</div>';
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/config/files/${filename}`);
+        const data = await r.json();
+
+        renderConfigEditor(data);
+      } catch (e) {
+        console.error('editConfigFile error:', e);
+        alert('加载文件失败');
+        loadConfig(currentAgent);
+      }
+    }
+
+    function renderConfigEditor(data) {
+      const contentArea = document.getElementById('contentArea');
+
+      contentArea.innerHTML = `
+        <div class="config-editor-container">
+          <div class="config-editor-header">
+            <button class="config-btn" onclick="loadConfig(currentAgent)">← 返回</button>
+            <div class="config-editor-title">
+              <span class="config-editor-icon">${data.icon}</span>
+              <span>${data.title}</span>
+            </div>
+            <button class="config-btn config-btn-primary" onclick="saveConfigFile('${data.filename}')">💾 保存</button>
+          </div>
+          <div class="config-editor-desc">${data.description}</div>
+          <div class="config-editor-wrapper">
+            <textarea id="configEditor" class="config-editor" placeholder="在此输入内容...">${escapeHtml(data.content || '')}</textarea>
+          </div>
+          <div class="config-editor-footer">
+            <span>Markdown 格式支持</span>
+            <span id="configCharCount">${(data.content || '').length} 字符</span>
+          </div>
+        </div>
+      `;
+
+      // 添加字符计数
+      const editor = document.getElementById('configEditor');
+      editor.addEventListener('input', () => {
+        document.getElementById('configCharCount').textContent = editor.value.length + ' 字符';
+      });
+    }
+
+    async function saveConfigFile(filename) {
+      if (!currentAgent) return;
+
+      const content = document.getElementById('configEditor').value;
+      const saveBtn = document.querySelector('.config-btn-primary');
+      saveBtn.textContent = '保存中...';
+      saveBtn.disabled = true;
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/config/files/${filename}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+
+        const data = await r.json();
+
+        if (data.success) {
+          saveBtn.textContent = '✅ 已保存';
+          setTimeout(() => {
+            saveBtn.textContent = '💾 保存';
+            saveBtn.disabled = false;
+          }, 1500);
+        } else {
+          throw new Error(data.error || '保存失败');
+        }
+      } catch (e) {
+        alert('保存失败: ' + e.message);
+        saveBtn.textContent = '💾 保存';
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function resetConfigFile(filename) {
+      if (!currentAgent) return;
+      if (!confirm('确定要重置此配置文件吗？文件将被删除。')) return;
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/config/files/${filename}`, {
+          method: 'DELETE'
+        });
+
+        const data = await r.json();
+
+        if (data.success) {
+          loadConfig(currentAgent);
+        } else {
+          throw new Error(data.error || '重置失败');
+        }
+      } catch (e) {
+        alert('重置失败: ' + e.message);
+      }
+    }
+
+    async function loadMemories(agent, forceUpdate = false) {
+      if (!agent) return;
+
+      // 只在memories tab或强制更新时才更新contentArea
+      const shouldUpdateUI = forceUpdate || currentTab === 'memories';
+      const contentArea = document.getElementById('contentArea');
+
+      // 显示加载提示（仅在需要更新UI时）
+      if (shouldUpdateUI) {
+        contentArea.innerHTML = '<div class="loading">加载记忆</div>';
+      }
+
+      try {
+        // 根据是否选择了日期来决定请求参数
+        let url;
+        if (selectedDate) {
+          // 使用本地日期格式，避免时区问题
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          url = `${API}/agents/${agent}/memories/time?start=${dateStr}&end=${dateStr}`;
+        } else {
+          url = `${API}/agents/${agent}/memories/time?range=week`;
+        }
+
+        const r = await fetch(url);
+        const data = await r.json();
+
+        // 只在需要更新UI时才更新contentArea
+        if (!shouldUpdateUI) return;
+
+        if (data.warning) {
+          contentArea.innerHTML = `
+            <div class="empty-state">
+              <p>⚠️ ${data.warning}</p>
+              <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                提示: 请启动 Weaviate 服务以启用完整功能<br>
+                命令: python main.py weaviate start
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        if (!data.memories?.length) {
+          contentArea.innerHTML = '<div class="empty-state"><p>暂无记忆</p></div>';
+          return;
+        }
+        
+        // 按时间戳倒序排序（最近的在最上面）
+        const sortedMemories = data.memories.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeB - timeA;  // 倒序：最新的在前
+        });
+        
+        contentArea.innerHTML = `<div class="memory-list">${sortedMemories.map(m => renderMemory(m)).join('')}</div>`;
+      } catch (e) {
+        console.error('loadMemories error:', e);
+        if (shouldUpdateUI) {
+          contentArea.innerHTML = '<div class="empty-state"><p>⚠️ 无法连接到记忆服务</p></div>';
+        }
+      }
+    }
+
+    function renderMemory(m) {
+      // 显示重排序分数（如果有）
+      const score = m._rerank_score || m.similarity || 0;
+      const scoreHtml = score > 0 ? `<span class="badge score">相关度: ${(score * 100).toFixed(0)}%</span>` : '';
+      
+      // 显示关键词标签
+      const keywords = m.keywords || [];
+      const keywordsHtml = keywords.length > 0 
+        ? `<div class="keywords">${keywords.slice(0,4).map(k => `<span class="keyword-tag">${k}</span>`).join('')}</div>` 
+        : '';
+      
+      return `
+        <div class="memory-item" onclick="showMemoryDetail('${m.id}')">
+          <div class="header">
+            <span class="time">${formatTime(m.timestamp)}</span>
+            <div class="meta">
+              ${scoreHtml}
+              <span class="badge">重要性: ${Math.round((m.importance || 0.5) * 10)}</span>
+            </div>
+          </div>
+          <div class="summary">${escapeHtml(m.summary || m.content?.substring(0, 150) || '')}</div>
+          ${keywordsHtml}
+        </div>
+      `;
+    }
+    
+    // 记忆详情模态框
+    let currentMemoryData = null;
+    
+    async function showMemoryDetail(memoryId) {
+      // 从当前显示的记忆列表中查找
+      if (currentMemoryData && currentMemoryData.id === memoryId) {
+        displayMemoryModal(currentMemoryData);
+        return;
+      }
+      
+      // 从 API 获取详情
+      try {
+        const r = await fetch(`${API}/memories/${memoryId}`);
+        const data = await r.json();
+        displayMemoryModal(data);
+      } catch (e) {
+        alert('获取记忆详情失败');
+      }
+    }
+    
+    function displayMemoryModal(m) {
+      // 创建模态框
+      const modal = document.createElement('div');
+      modal.className = 'memory-modal';
+      modal.innerHTML = `
+        <div class="memory-modal-content">
+          <div class="memory-modal-header">
+            <h3>记忆详情</h3>
+            <button onclick="this.closest('.memory-modal').remove()">×</button>
+          </div>
+          <div class="memory-modal-body">
+            <div class="detail-section">
+              <h4>📝 摘要</h4>
+              <p class="summary-text">${escapeHtml(m.summary || '无摘要')}</p>
+            </div>
+            <div class="detail-section">
+              <h4>📄 原文</h4>
+              <div class="raw-content">${escapeHtml(m.content || '无内容')}</div>
+            </div>
+            <div class="detail-section">
+              <h4>📊 元数据</h4>
+              <div class="meta-info">
+                <span>时间: ${formatTime(m.timestamp)}</span>
+                <span>重要性: ${Math.round((m.importance || 0.5) * 10)}/10</span>
+                ${m.keywords?.length ? `<span>关键词: ${m.keywords.join(', ')}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    }
+
+    async function searchMemories() {
+      if (!currentAgent) return alert('请先选择 Agent');
+      const query = document.getElementById('searchInput').value;
+      if (!query) return;
+      const contentArea = document.getElementById('contentArea');
+      contentArea.innerHTML = '<div class="loading">搜索中...</div>';
+      try {
+        // 使用重排序 API 获得更好的搜索效果
+        const r = await fetch(`${API}/agents/${currentAgent}/rerank`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            query, 
+            limit: 30,      // 召回30条
+            top_k: 15,      // 重排序后返回15条
+            time_decay: 0.1,
+            importance_weight: 0.3
+          })
+        });
+        const data = await r.json();
+
+        if (data.warning) {
+          contentArea.innerHTML = `<div class="empty-state"><p>⚠️ ${data.warning}</p></div>`;
+          return;
+        }
+
+        if (!data.memories?.length) {
+          contentArea.innerHTML = '<div class="empty-state"><p>未找到匹配的记忆</p></div>';
+          return;
+        }
+        
+        // 按时间戳倒序排序
+        const sortedResults = data.memories.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeB - timeA;
+        });
+        
+        contentArea.innerHTML = `<div class="memory-list">${sortedResults.map(m => renderMemory(m)).join('')}</div>`;
+      } catch (e) {
+        contentArea.innerHTML = '<div class="empty-state"><p>⚠️ 无法连接到搜索服务</p></div>';
+      }
+    }
+
+    function quickSearch(q) { document.getElementById('searchInput').value = q; searchMemories(); }
+
+    
+    // ========== 知识图谱全屏功能 ==========
+    let isGraphFullscreen = false;
+    let graphDataCache = null;  // 缓存图谱数据
+
+    function toggleGraphFullscreen() {
+      const container = document.getElementById('graphContainer');
+      if (!container) return;
+
+      if (!isGraphFullscreen) {
+        // 进入全屏
+        isGraphFullscreen = true;
+        
+        // 创建全屏容器
+        const fullscreenDiv = document.createElement('div');
+        fullscreenDiv.id = 'graphFullscreenContainer';
+        fullscreenDiv.innerHTML = `
+          <div class="graph-fullscreen-header">
+            <h2>🕸️ 知识图谱 - ${currentAgent || 'Agent'}</h2>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <span style="color: #888; font-size: 13px;">滚轮缩放 | 拖拽移动 | 拖拽节点调整位置</span>
+              <button class="exit-fullscreen-btn" onclick="exitGraphFullscreen()">✕ 退出全屏</button>
+            </div>
+          </div>
+          <div class="graph-fullscreen-content" id="fullscreenGraphContent"></div>
+        `;
+        fullscreenDiv.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: #0a0a15;';
+        
+        document.body.appendChild(fullscreenDiv);
+        
+        // 在全屏容器中重新渲染图谱
+        if (graphDataCache) {
+          renderFullscreenGraph(graphDataCache);
+        } else {
+          // 重新加载数据
+          loadKnowledgeGraph(currentAgent);
+        }
+        
+        // 监听ESC键退出
+        document.addEventListener('keydown', handleFullscreenKeydown);
+      }
+    }
+
+    function exitGraphFullscreen() {
+      isGraphFullscreen = false;
+      const fullscreenDiv = document.getElementById('graphFullscreenContainer');
+      if (fullscreenDiv) {
+        fullscreenDiv.remove();
+      }
+      document.removeEventListener('keydown', handleFullscreenKeydown);
+    }
+
+    function handleFullscreenKeydown(e) {
+      if (e.key === 'Escape' && isGraphFullscreen) {
+        exitGraphFullscreen();
+      }
+    }
+
+    function renderFullscreenGraph(data) {
+      const container = document.getElementById('fullscreenGraphContent');
+      if (!container || !data.nodes?.length) return;
+      
+      const width = window.innerWidth;
+      const height = window.innerHeight - 60;
+
+      container.innerHTML = '';
+
+      const svg = d3.select(container).append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      const g = svg.append('g');
+
+      const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform);
+        });
+
+      svg.call(zoom);
+
+      const simulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id || d.name).distance(250))
+        .force('charge', d3.forceManyBody().strength(-1500))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => (d.size || 20) + 70));
+
+      // 绘制连线
+      const links = g.append('g')
+        .selectAll('line')
+        .data(data.links)
+        .enter().append('line')
+        .attr('class', 'link')
+        .attr('stroke-width', d => Math.sqrt(d.value || 1) * 2);
+
+      // 连线标签
+      const linkLabels = g.append('g')
+        .selectAll('text')
+        .data(data.links)
+        .enter().append('text')
+        .attr('font-size', '11px')
+        .attr('fill', '#888')
+        .attr('text-anchor', 'middle')
+        .text(d => d.relation || d.type || '');
+
+      // 绘制节点
+      const nodes = g.append('g')
+        .selectAll('.node')
+        .data(data.nodes)
+        .enter().append('g')
+        .attr('class', 'node')
+        .call(d3.drag()
+          .on('start', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on('drag', (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on('end', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+          }));
+
+      nodes.append('circle')
+        .attr('r', d => (d.size || 20) + 5)
+        .attr('fill', d => d.color || '#4fc3f7')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2);
+
+      nodes.append('text')
+        .attr('dy', d => (d.size || 20) + 25)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '14px')
+        .attr('fill', '#e0e0e0')
+        .text(d => (d.name || d.id || '').substring(0, 30));
+
+      // 悬停效果
+      nodes.on('mouseover', function(event, d) {
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', (d.size || 20) + 15);
+      }).on('mouseout', function(event, d) {
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', (d.size || 20) + 5);
+      });
+
+      simulation.on('tick', () => {
+        links
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        linkLabels
+          .attr('x', d => (d.source.x + d.target.x) / 2)
+          .attr('y', d => (d.source.y + d.target.y) / 2);
+
+        nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+    }
+
+// ========== 知识库 ==========
+    async function loadKnowledgeBase() {
+      const contentArea = document.getElementById('contentArea');
+      contentArea.innerHTML = '<div class="loading">加载知识库</div>';
+
+      try {
+        // 获取文档列表
+        const docsRes = await fetch('/api/kb/documents');
+        const docsData = await docsRes.json();
+        const documents = docsData.documents || [];
+
+        contentArea.innerHTML = `
+          <div class="kb-container">
+            <div class="kb-header">
+              <h3>📚 知识库</h3>
+              <div class="kb-stats">
+                <span>📄 ${documents.length} 个文档</span>
+              </div>
+            </div>
+            
+            <div class="kb-upload-section">
+              <div class="kb-upload-box" id="uploadBox">
+                <input type="file" id="kbFileInput" accept=".pdf,.txt,.md,.docx" style="display:none">
+                <div class="kb-upload-drag" onclick="document.getElementById('kbFileInput').click()">
+                  <div style="font-size: 32px; margin-bottom: 10px;">📤</div>
+                  <div>点击或拖拽文件到这里上传</div>
+                  <div style="font-size: 12px; color: #888; margin-top: 8px;">支持 PDF, TXT, MD, DOCX</div>
+                </div>
+                <div id="uploadProgress" style="display:none; padding: 10px;">
+                  <div style="color: #4fc3f7;">上传中...</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="kb-search-section" style="margin: 15px 0;">
+              <div class="search-box">
+                <input type="text" id="kbSearchInput" placeholder="搜索知识库..." 
+                  onkeypress="if(event.key==='Enter')searchKnowledgeBase()">
+                <button onclick="searchKnowledgeBase()">搜索</button>
+              </div>
+            </div>
+
+            <div class="kb-doc-list" id="kbDocList">
+              ${documents.length === 0 ? 
+                '<div class="empty-state"><p>暂无文档，上传文档构建知识库</p></div>' : 
+                documents.map(doc => `
+                  <div class="kb-doc-item">
+                    <div class="kb-doc-info">
+                      <div class="kb-doc-title">📄 ${escapeHtml(doc.title || doc.source)}</div>
+                      <div class="kb-doc-meta">
+                        <span>📦 ${doc.chunk_count} 个片段</span>
+                        <span>📅 ${formatDate(doc.timestamp)}</span>
+                      </div>
+                    </div>
+                    <button class="kb-doc-delete" onclick="deleteKbDocument('${doc.document_id}')" title="删除">🗑️</button>
+                  </div>
+                `).join('')
+              }
+            </div>
+
+            <div class="kb-search-results" id="kbSearchResults" style="display:none; margin-top: 15px;">
+              <h4>搜索结果</h4>
+              <div id="kbResultsContent"></div>
+            </div>
+          </div>
+        `;
+
+        // 添加文件上传事件
+        document.getElementById('kbFileInput').addEventListener('change', handleKbFileUpload);
+
+        // 拖拽上传
+        const uploadBox = document.getElementById('uploadBox');
+        uploadBox.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          uploadBox.style.borderColor = '#4fc3f7';
+        });
+        uploadBox.addEventListener('dragleave', () => {
+          uploadBox.style.borderColor = '#2a2a4a';
+        });
+        uploadBox.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          uploadBox.style.borderColor = '#2a2a4a';
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            await uploadKbFile(files[0]);
+          }
+        });
+
+      } catch (e) {
+        console.error('loadKnowledgeBase error:', e);
+        contentArea.innerHTML = `<div class="error-state"><p>加载失败: ${e.message}</p></div>`;
+      }
+    }
+
+    async function handleKbFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      await uploadKbFile(file);
+    }
+
+    async function uploadKbFile(file) {
+      const progressEl = document.getElementById('uploadProgress');
+      const dragEl = document.querySelector('.kb-upload-drag');
+      
+      dragEl.style.display = 'none';
+      progressEl.style.display = 'block';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('/api/kb/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`✅ 上传成功！已处理 ${result.stored} 个片段`);
+          loadKnowledgeBase(); // 刷新列表
+        } else {
+          alert(`❌ 上传失败: ${result.error}`);
+        }
+      } catch (e) {
+        alert(`❌ 上传失败: ${e.message}`);
+      } finally {
+        dragEl.style.display = 'block';
+        progressEl.style.display = 'none';
+      }
+    }
+
+    async function searchKnowledgeBase() {
+      const query = document.getElementById('kbSearchInput').value.trim();
+      if (!query) return;
+
+      const resultsEl = document.getElementById('kbSearchResults');
+      const contentEl = document.getElementById('kbResultsContent');
+      
+      resultsEl.style.display = 'block';
+      contentEl.innerHTML = '<div class="loading">搜索中...</div>';
+
+      try {
+        const response = await fetch(`/api/kb/search?q=${encodeURIComponent(query)}&limit=10`);
+        const data = await response.json();
+
+        if (data.results && data.results.length > 0) {
+          contentEl.innerHTML = data.results.map(doc => `
+            <div class="kb-result-item">
+              <div class="kb-result-title">📄 ${escapeHtml(doc.title)}</div>
+              <div class="kb-result-source">来源: ${escapeHtml(doc.source)}</div>
+              <div class="kb-result-chunks">
+                ${doc.chunks.map(chunk => `
+                  <div class="kb-chunk">
+                    <div style="color: #888; font-size: 11px; margin-bottom: 4px;">
+                      片段 ${chunk.chunk_index + 1}
+                    </div>
+                    ${escapeHtml(chunk.content)}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          contentEl.innerHTML = '<div class="empty-state">未找到相关内容</div>';
+        }
+      } catch (e) {
+        contentEl.innerHTML = `<div class="error-state">搜索失败: ${e.message}</div>`;
+      }
+    }
+
+    async function deleteKbDocument(documentId) {
+      if (!confirm('确定要删除这个文档吗？')) return;
+
+      try {
+        const response = await fetch(`/api/kb/documents/${documentId}`, {
+          method: 'DELETE'
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          alert('✅ 删除成功');
+          loadKnowledgeBase();
+        } else {
+          alert('❌ 删除失败');
+        }
+      } catch (e) {
+        alert(`❌ 删除失败: ${e.message}`);
+      }
+    }
+
+// ========== 知识图谱 ==========
+    let selectedNode = null;
+    let selectedLink = null;
+    let currentSimulation = null;  // 当前运行的力导向模拟
+
+    async function loadKnowledgeGraph(agent, forceUpdate = false) {
+      if (!agent) return;
+
+      // 只在graph tab或强制更新时才更新contentArea
+      const shouldUpdateUI = forceUpdate || currentTab === 'graph';
+      if (!shouldUpdateUI) return;
+
+      const contentArea = document.getElementById('contentArea');
+
+      // 显示加载提示
+      contentArea.innerHTML = '<div class="loading">加载知识图谱</div>';
+      try {
+        const graphData = await fetch(`${API}/agents/${agent}/graph?limit=50`).then(r => r.json());
+
+        // 再次检查是否仍在graph tab
+        if (currentTab !== 'graph') return;
+
+        if (graphData.warning) {
+          contentArea.innerHTML = `<div class="empty-state"><p>⚠️ ${graphData.warning}</p></div>`;
+          return;
+        }
+
+        const stats = await fetch(`${API}/agents/${agent}/graph/stats`).then(r => r.json());
+
+        // 再次检查是否仍在graph tab
+        if (currentTab !== 'graph') return;
+
+        contentArea.innerHTML = `
+          <div style="padding: 10px; display: flex; justify-content: space-between; align-items: center; background: #1e1e3f; border-radius: 8px 8px 0 0;">
+            <div style="color: #888; font-size: 13px;">${stats.totalEntities} 实体, ${stats.totalRelations} 关系</div>
+            <div style="display: flex; gap: 8px;">
+              <button class="sync-btn" id="extractBtn" onclick="extractEntities()" title="从记忆中提取实体">🧠 提取</button>
+              <button class="sync-btn danger-btn" id="clearKgBtn" onclick="clearKnowledgeGraph()" title="清空知识图谱数据">🗑️ 清空</button>
+              <button class="sync-btn" id="workspaceBtn" onclick="parseWorkspace()" title="从Workspace文件提取实体">📁 WS</button>
+              <button class="sync-btn" id="crmBtn" onclick="showCrmImportDialog()" title="CRM数据导入Demo">📊 CRM</button>
+              <button class="kg-btn" onclick="showAddEntityDialog()">➕ 添加实体</button>
+              <button class="kg-btn" onclick="showAddRelationDialog()">🔗 添加关系</button>
+            </div>
+          </div>
+          <div class="graph-container" id="graphContainer" style="position: relative; border-radius: 0 0 8px 8px; height: calc(100vh - 200px);">
+            <button class="graph-fullscreen-btn" onclick="toggleGraphFullscreen()" title="全屏查看知识图谱">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              </svg>
+            </button>
+          </div>
+          <div id="contextMenu" class="context-menu" style="display: none;">
+            <div class="context-menu-item" onclick="deleteSelectedEntity()">🗑️ 删除实体</div>
+            <div class="context-menu-item" onclick="deleteSelectedRelation()">🗑️ 删除关系</div>
+          </div>
+          <div id="addEntityDialog" class="dialog-overlay" style="display: none;">
+            <div class="dialog">
+              <h3>添加实体</h3>
+              <div class="form-group">
+                <label>实体名称</label>
+                <input type="text" id="entityName" placeholder="如：抖音">
+              </div>
+              <div class="form-group">
+                <label>实体类型</label>
+                <select id="entityType">
+                  <option value="platform">平台</option>
+                  <option value="person">人物</option>
+                  <option value="organization">组织</option>
+                  <option value="product">产品</option>
+                  <option value="project">项目</option>
+                  <option value="concept">概念</option>
+                  <option value="entity">其他</option>
+                </select>
+              </div>
+              <div class="dialog-buttons">
+                <button class="dialog-btn cancel" onclick="closeDialog('addEntityDialog')">取消</button>
+                <button class="dialog-btn confirm" onclick="submitAddEntity()">确认</button>
+              </div>
+            </div>
+          </div>
+          <div id="addRelationDialog" class="dialog-overlay" style="display: none;">
+            <div class="dialog">
+              <h3>添加关系</h3>
+              <div class="form-group">
+                <label>源实体</label>
+                <input type="text" id="relationSource" placeholder="如：抖音">
+              </div>
+              <div class="form-group">
+                <label>关系类型</label>
+                <input type="text" id="relationType" placeholder="如：支持、包含、合作">
+              </div>
+              <div class="form-group">
+                <label>目标实体</label>
+                <input type="text" id="relationTarget" placeholder="如：广告投放">
+              </div>
+              <div class="dialog-buttons">
+                <button class="dialog-btn cancel" onclick="closeDialog('addRelationDialog')">取消</button>
+                <button class="dialog-btn confirm" onclick="submitAddRelation()">确认</button>
+              </div>
+            </div>
+          </div>
+          <div id="crmImportDialog" class="dialog-overlay" style="display: none;">
+            <div class="dialog" style="min-width: 450px;">
+              <h3>📊 CRM 数据导入 Demo</h3>
+              <p style="font-size: 12px; color: #888; margin-bottom: 16px;">
+                演示CRM用户数据导入功能，支持CSV/JSON格式
+              </p>
+              <div class="form-group">
+                <label>导入方式</label>
+                <select id="crmImportType" onchange="toggleCrmInput()">
+                  <option value="demo">使用演示数据</option>
+                  <option value="csv">CSV 格式</option>
+                  <option value="json">JSON 格式</option>
+                </select>
+              </div>
+              <div id="crmDemoSection">
+                <div style="background: #2a2a4a; padding: 12px; border-radius: 6px; font-size: 12px; color: #aaa;">
+                  <strong style="color: #4fc3f7;">演示数据预览：</strong><br>
+                  <code style="color: #a5d6a7; font-size: 11px;">
+                    用户001, 张三, 上海, 金卡会员, 消费¥5,000<br>
+                    用户002, 李四, 北京, 银卡会员, 消费¥3,200<br>
+                    用户003, 王五, 深圳, 金卡会员, 消费¥8,900
+                  </code>
+                </div>
+              </div>
+              <div id="crmInputSection" style="display: none;">
+                <div class="form-group">
+                  <label>数据内容</label>
+                  <textarea id="crmDataInput" rows="6" style="width: 100%; padding: 8px; border: 1px solid #3a3a5a; border-radius: 6px; background: #2a2a4a; color: #e0e0e0; font-size: 12px; font-family: monospace;" placeholder="user_id,name,region,member_level,total_spent&#10;user_001,张三,上海,金卡,5000"></textarea>
+                </div>
+              </div>
+              <div id="crmResultSection" style="display: none; margin-top: 12px;">
+                <div style="background: #1b5e20; padding: 12px; border-radius: 6px; font-size: 12px;">
+                  <strong style="color: #a5d6a7;">导入结果：</strong>
+                  <div id="crmResultContent" style="color: #fff; margin-top: 8px;"></div>
+                </div>
+              </div>
+              <div class="dialog-buttons">
+                <button class="dialog-btn cancel" onclick="closeDialog('crmImportDialog')">关闭</button>
+                <button class="dialog-btn confirm" onclick="importCrmDemo()">导入</button>
+              </div>
+            </div>
+          </div>
+        `;
+        // 确保 DOM 已更新后再渲染图谱
+        setTimeout(() => renderKnowledgeGraph(graphData), 50);
+      } catch (e) {
+        if (currentTab === 'graph') {
+          contentArea.innerHTML = '<div class="empty-state"><p>⚠️ 无法连接到知识图谱服务</p></div>';
+        }
+      }
+    }
+
+    function renderKnowledgeGraph(data) {
+      // 停止并清理旧的力导向模拟
+      if (currentSimulation) {
+        currentSimulation.stop();
+        currentSimulation = null;
+      }
+
+      // 缓存图谱数据用于全屏显示
+      graphDataCache = data;
+      const container = document.getElementById('graphContainer');
+      if (!container) return;
+
+      // 如果没有节点数据，显示空状态
+      if (!data.nodes?.length) {
+        container.innerHTML = '<div class="empty-state"><p>暂无图谱数据</p></div>';
+        return;
+      }
+
+      const width = container.clientWidth;
+      const height = container.clientHeight || 400;
+
+      // 完全清空容器
+      container.innerHTML = '';
+
+      // 重置选中的节点和关系
+      selectedNode = null;
+      selectedLink = null;
+
+      // 创建新的SVG
+      const svg = d3.select(container).append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+      // 添加定义（用于连线标签背景）
+      const defs = svg.append('defs');
+      
+      const g = svg.append('g');
+
+      // 缩放功能
+      const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+          g.attr('transform', event.transform);
+        });
+
+      svg.call(zoom);
+
+      // 计算节点大小（根据连接数）
+      const linkCounts = {};
+      data.links.forEach(l => {
+        const src = l.source.id || l.source;
+        const tgt = l.target.id || l.target;
+        linkCounts[src] = (linkCounts[src] || 0) + 1;
+        linkCounts[tgt] = (linkCounts[tgt] || 0) + 1;
+      });
+      
+      data.nodes.forEach((n, i) => {
+        n.linkCount = linkCounts[n.id || n.name] || 0;
+        n.size = Math.max(18, Math.min(35, 18 + n.linkCount * 3));
+        // 设置随机初始位置，让节点分散开
+        const angle = (2 * Math.PI * i) / data.nodes.length;
+        const radius = Math.min(width, height) * 0.35;
+        n.x = width / 2 + radius * Math.cos(angle) + (Math.random() - 0.5) * 100;
+        n.y = height / 2 + radius * Math.sin(angle) + (Math.random() - 0.5) * 100;
+      });
+
+      // 创建新的力导向模拟 - 优化参数避免重叠
+      currentSimulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id || d.name).distance(250))
+        .force('charge', d3.forceManyBody().strength(-1500))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => (d.size || 20) + 70))
+
+      // 绘制连线
+      const links = g.append('g')
+        .selectAll('line')
+        .data(data.links)
+        .enter().append('line')
+        .attr('class', 'link')
+        .attr('stroke-width', d => Math.sqrt(d.value || 1) * 2);
+
+      // 连线标签背景 + 文字（优化显示）
+      const linkLabelGroups = g.append('g')
+        .selectAll('.link-label-group')
+        .data(data.links)
+        .enter().append('g')
+        .attr('class', 'link-label-group');
+
+      // 添加背景矩形
+      linkLabelGroups.append('rect')
+        .attr('class', 'link-label-bg')
+        .attr('fill', '#1a1a2e')
+        .attr('stroke', '#333')
+        .attr('stroke-width', 0.5)
+        .attr('rx', 3)
+        .attr('ry', 3);
+
+      // 添加文字
+      linkLabelGroups.append('text')
+        .attr('font-size', '9px')
+        .attr('fill', '#aaa')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .text(d => (d.relation || d.type || '').substring(0, 12));
+
+      // 绘制节点
+      const nodes = g.append('g')
+        .selectAll('.node')
+        .data(data.nodes)
+        .enter().append('g')
+        .attr('class', 'node')
+        .call(d3.drag()
+          .on('start', (event, d) => {
+            if (!event.active) currentSimulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on('drag', (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on('end', (event, d) => {
+            if (!event.active) currentSimulation.alphaTarget(0);
+          }));
+
+      nodes.append('circle')
+        .attr('r', d => d.size || 20)
+        .attr('fill', d => d.color || '#4fc3f7')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2);
+
+      // 节点文字 - 优化显示
+      nodes.append('text')
+        .attr('dy', d => (d.size || 20) + 14)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '11px')
+        .attr('font-weight', '500')
+        .attr('fill', '#e0e0e0')
+        .text(d => {
+          const name = d.name || d.id || '';
+          return name.length > 15 ? name.substring(0, 15) + '...' : name;
+        });
+
+      // 添加节点类型小标签
+      nodes.append('text')
+        .attr('dy', 4)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '8px')
+        .attr('fill', '#666')
+        .text(d => (d.type || '').substring(0, 6));
+
+      nodes.on('mouseover', function(event, d) {
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', (d.size || 20) + 5);
+        
+        // 高亮相关连线
+        links.attr('stroke', l => 
+          (l.source.id || l.source) === (d.id || d.name) || 
+          (l.target.id || l.target) === (d.id || d.name) ? '#4fc3f7' : '#444'
+        ).attr('stroke-opacity', l => 
+          (l.source.id || l.source) === (d.id || d.name) || 
+          (l.target.id || l.target) === (d.id || d.name) ? 1 : 0.3
+        );
+      }).on('mouseout', function(event, d) {
+        d3.select(this).select('circle')
+          .transition()
+          .duration(200)
+          .attr('r', d.size || 20);
+        
+        links.attr('stroke', '#444').attr('stroke-opacity', 0.6);
+      });
+
+      nodes.on('contextmenu', function(event, d) {
+        event.preventDefault();
+        selectedNode = d;
+        selectedLink = null;
+        const menu = document.getElementById('contextMenu');
+        if (menu) {
+          menu.style.display = 'block';
+          menu.style.left = event.pageX + 'px';
+          menu.style.top = event.pageY + 'px';
+          menu.querySelectorAll('.context-menu-item')[0].style.display = 'block';
+        }
+      });
+
+      links.on('contextmenu', function(event, d) {
+        event.preventDefault();
+        selectedLink = d;
+        selectedNode = null;
+        const menu = document.getElementById('contextMenu');
+        if (menu) {
+          menu.style.display = 'block';
+          menu.style.left = event.pageX + 'px';
+          menu.style.top = event.pageY + 'px';
+          menu.querySelectorAll('.context-menu-item')[0].style.display = 'none';
+        }
+      });
+
+      svg.on('click', function() {
+        const menu = document.getElementById('contextMenu');
+        if (menu) menu.style.display = 'none';
+      });
+
+      // 更新位置
+      currentSimulation.on('tick', () => {
+
+        links
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        // 更新连线标签位置和背景大小
+        linkLabelGroups.each(function(d) {
+          const x = (d.source.x + d.target.x) / 2;
+          const y = (d.source.y + d.target.y) / 2;
+          const text = d3.select(this).select('text');
+          const rect = d3.select(this).select('rect');
+          
+          // 获取文字边界
+          try {
+            const bbox = text.node().getBBox();
+            rect.attr('x', bbox.x - 4)
+                .attr('y', bbox.y - 2)
+                .attr('width', bbox.width + 8)
+                .attr('height', bbox.height + 4);
+          } catch(e) {}
+          
+          text.attr('x', x).attr('y', y);
+          rect.attr('x', x - (parseFloat(rect.attr('width')) || 30) / 2)
+              .attr('y', y - (parseFloat(rect.attr('height')) || 12) / 2);
+        });
+
+        nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+      });
+    }
+
+    function showAddEntityDialog() {
+      document.getElementById('addEntityDialog').style.display = 'flex';
+    }
+
+    function showAddRelationDialog() {
+      document.getElementById('addRelationDialog').style.display = 'flex';
+    }
+
+    function closeDialog(dialogId) {
+      document.getElementById(dialogId).style.display = 'none';
+    }
+
+    async function submitAddEntity() {
+      const name = document.getElementById('entityName').value.trim();
+      const type = document.getElementById('entityType').value;
+
+      if (!name) {
+        alert('请输入实体名称');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API}/agents/${currentAgent}/entities`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, type })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`实体 "${name}" 添加成功！`);
+          closeDialog('addEntityDialog');
+          document.getElementById('entityName').value = '';
+          loadKnowledgeGraph(currentAgent);
+        } else {
+          alert('添加失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('添加失败: ' + e.message);
+      }
+    }
+
+    async function submitAddRelation() {
+      const source = document.getElementById('relationSource').value.trim();
+      const relation = document.getElementById('relationType').value.trim();
+      const target = document.getElementById('relationTarget').value.trim();
+
+      if (!source || !relation || !target) {
+        alert('请填写完整的关系信息');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API}/agents/${currentAgent}/relations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source, relation, target })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`关系添加成功！`);
+          closeDialog('addRelationDialog');
+          document.getElementById('relationSource').value = '';
+          document.getElementById('relationType').value = '';
+          document.getElementById('relationTarget').value = '';
+          loadKnowledgeGraph(currentAgent);
+        } else {
+          alert('添加失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('添加失败: ' + e.message);
+      }
+    }
+
+    async function deleteSelectedEntity() {
+      if (!selectedNode) return;
+
+      const entityName = selectedNode.name || selectedNode.id;
+      if (!confirm(`确定要删除实体 "${entityName}" 及其所有关联关系吗？`)) return;
+
+      try {
+        const response = await fetch(`${API}/agents/${currentAgent}/entities/${encodeURIComponent(entityName)}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(result.message);
+          document.getElementById('contextMenu').style.display = 'none';
+          loadKnowledgeGraph(currentAgent);
+        } else {
+          alert('删除失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('删除失败: ' + e.message);
+      }
+    }
+
+    async function deleteSelectedRelation() {
+      if (!selectedLink) return;
+
+      const source = selectedLink.source?.name || selectedLink.source?.id || selectedLink.source;
+      const relation = selectedLink.relation || selectedLink.type;
+      const target = selectedLink.target?.name || selectedLink.target?.id || selectedLink.target;
+
+      if (!confirm(`确定要删除关系吗？`)) return;
+
+      try {
+        const response = await fetch(`${API}/agents/${currentAgent}/relations`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source, relation, target })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert(result.message);
+          document.getElementById('contextMenu').style.display = 'none';
+          loadKnowledgeGraph(currentAgent);
+        } else {
+          alert('删除失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('删除失败: ' + e.message);
+      }
+    }
+
+    // ==================== CRM 导入 Demo ====================
+    
+    function showCrmImportDialog() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+      document.getElementById('crmImportDialog').style.display = 'flex';
+      document.getElementById('crmResultSection').style.display = 'none';
+    }
+
+    function toggleCrmInput() {
+      const importType = document.getElementById('crmImportType').value;
+      document.getElementById('crmDemoSection').style.display = importType === 'demo' ? 'block' : 'none';
+      document.getElementById('crmInputSection').style.display = importType === 'demo' ? 'none' : 'block';
+    }
+
+    async function importCrmDemo() {
+      const importType = document.getElementById('crmImportType').value;
+      const btn = document.querySelector('#crmImportDialog .dialog-btn.confirm');
+      btn.textContent = '导入中...';
+      btn.disabled = true;
+
+      try {
+        let result;
+        
+        if (importType === 'demo') {
+          // 使用演示数据
+          const demoUsers = [
+            { user_id: 'user_001', name: '张三', region: '上海', member_level: '金卡', total_spent: 5000, total_orders: 12 },
+            { user_id: 'user_002', name: '李四', region: '北京', member_level: '银卡', total_spent: 3200, total_orders: 8 },
+            { user_id: 'user_003', name: '王五', region: '深圳', member_level: '金卡', total_spent: 8900, total_orders: 25 }
+          ];
+          
+          const r = await fetch(`${API}/commerce/agents/${currentAgent}/crm/import/json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ users: demoUsers })
+          });
+          result = await r.json();
+        } else if (importType === 'csv') {
+          const content = document.getElementById('crmDataInput').value;
+          if (!content.trim()) {
+            alert('请输入CSV数据');
+            btn.textContent = '导入';
+            btn.disabled = false;
+            return;
+          }
+          const r = await fetch(`${API}/commerce/agents/${currentAgent}/crm/import/csv`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+          });
+          result = await r.json();
+        } else if (importType === 'json') {
+          const content = document.getElementById('crmDataInput').value;
+          if (!content.trim()) {
+            alert('请输入JSON数据');
+            btn.textContent = '导入';
+            btn.disabled = false;
+            return;
+          }
+          let users;
+          try {
+            users = JSON.parse(content);
+          } catch {
+            alert('JSON格式错误');
+            btn.textContent = '导入';
+            btn.disabled = false;
+            return;
+          }
+          const r = await fetch(`${API}/commerce/agents/${currentAgent}/crm/import/json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ users })
+          });
+          result = await r.json();
+        }
+
+        // 显示结果
+        document.getElementById('crmResultSection').style.display = 'block';
+        document.getElementById('crmResultContent').innerHTML = `
+          <div>✅ 导入成功！</div>
+          <div style="margin-top: 8px;">
+            <span style="color: #4fc3f7;">总计:</span> ${result.total || 0} 条<br>
+            <span style="color: #4fc3f7;">新增:</span> ${result.imported || 0} 条<br>
+            <span style="color: #4fc3f7;">更新:</span> ${result.updated || 0} 条<br>
+            ${result.errors?.length ? `<span style="color: #f44336;">错误:</span> ${result.errors.length} 条` : ''}
+          </div>
+        `;
+        
+        // 刷新统计
+        await loadStats(currentAgent);
+        
+      } catch (e) {
+        console.error('CRM import error:', e);
+        document.getElementById('crmResultSection').style.display = 'block';
+        document.getElementById('crmResultContent').innerHTML = `
+          <div style="color: #f44336;">❌ 导入失败: ${e.message}</div>
+          <div style="margin-top: 8px; font-size: 11px; color: #888;">
+            提示: CRM功能需要Weaviate支持，请确保服务正常运行
+          </div>
+        `;
+      }
+
+      btn.textContent = '导入';
+      btn.disabled = false;
+    }
+
+    async function loadStats(agent) {
+      try {
+        const statsResponse = await fetch(`${API}/agents/${agent}/stats`);
+        if (!statsResponse.ok) throw new Error('Stats API error');
+        const stats = await statsResponse.json();
+
+        const graphStatsResponse = await fetch(`${API}/agents/${agent}/graph/stats`);
+        const graphStats = graphStatsResponse.ok ? await graphStatsResponse.json() : {};
+
+        document.getElementById('totalMemories').textContent = stats.total_memories || 0;
+        document.getElementById('totalEntities').textContent = graphStats.totalEntities || stats.total_entities || 0;
+        document.getElementById('totalRelations').textContent = graphStats.totalRelations || stats.total_relations || 0;
+        // totalSessions 由 loadSessions 更新
+      } catch (e) {
+        console.error('loadStats error:', e);
+        document.getElementById('totalMemories').textContent = '0';
+        document.getElementById('totalEntities').textContent = '0';
+        document.getElementById('totalRelations').textContent = '0';
+      }
+    }
+
+    async function loadEntities(agent) {
+      try {
+        const r = await fetch(`${API}/agents/${agent}/entities`);
+        if (!r.ok) throw new Error('Entities API error');
+        const entities = await r.json();
+        const list = document.getElementById('entityList');
+
+        if (!entities || !Array.isArray(entities) || !entities.length) {
+          list.innerHTML = '<span class="entity-tag">暂无实体</span>';
+          return;
+        }
+        list.innerHTML = entities.slice(0, 20).map(e => `
+          <span class="entity-tag" onclick="quickSearch('${escapeHtml(e.name)}')">
+            ${escapeHtml(e.name)} <span class="type">${e.type || ''}</span>
+            <span class="count">${e.mentionCount || 1}</span>
+          </span>
+        `).join('');
+      } catch (e) {
+        console.error('loadEntities error:', e);
+        document.getElementById('entityList').innerHTML = '<span class="entity-tag">加载失败</span>';
+      }
+    }
+
+    function formatDate(ts) {
+      if (!ts) return '-';
+      try {
+        const d = new Date(ts);
+        const now = new Date();
+        const isCurrentYear = d.getFullYear() === now.getFullYear();
+        
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hour = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        
+        if (isCurrentYear) {
+          return `${month}-${day} ${hour}:${min}`;
+        } else {
+          return `${year}-${month}-${day}`;
+        }
+      } catch {
+        return '-';
+      }
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '';
+      try {
+        const d = new Date(ts);
+        const now = new Date();
+        const diff = now - d;
+
+        if (diff < 60000) return '刚刚';
+        if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+
+        const isCurrentYear = d.getFullYear() === now.getFullYear();
+
+        if (isCurrentYear) {
+          return `${d.getMonth() + 1}月${d.getDate()}日`;
+        } else {
+          return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        }
+      } catch {
+        return '';
+      }
+    }
+
+    function formatMsgTime(ts) {
+      // 会话消息时间戳：显示年月日时分秒
+      if (!ts) return '';
+      try {
+        const d = new Date(ts);
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        const h = d.getHours().toString().padStart(2, '0');
+        const m = d.getMinutes().toString().padStart(2, '0');
+        const s = d.getSeconds().toString().padStart(2, '0');
+        return `${year}-${month}-${day} ${h}:${m}:${s}`;
+      } catch {
+        return ts;
+      }
+    }
+
+    // ========== 数据导出/导入 ==========
+    async function exportAllData() {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        return;
+      }
+
+      if (!confirm(`确定要导出 ${currentAgent} 的所有数据吗？\n\n包括：记忆、知识图谱、配置文件`)) {
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API}/agents/${currentAgent}/export`);
+        const data = await r.json();
+
+        if (data.error) {
+          alert('导出失败: ' + data.error);
+          return;
+        }
+
+        // 创建下载
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentAgent}_backup_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert(`✅ 导出成功！\n\n- 记忆: ${data.stats.total_memories} 条\n- 知识图谱: ${data.stats.total_kg_items} 项\n- 配置文件: ${Object.keys(data.config_files || {}).length} 个`);
+      } catch (e) {
+        alert('导出失败: ' + e.message);
+      }
+    }
+
+    async function importAllData(event) {
+      if (!currentAgent) {
+        alert('请先选择 Agent');
+        event.target.value = '';
+        return;
+      }
+
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!confirm(`确定要导入数据到 ${currentAgent} 吗？\n\n⚠️ 这将合并到现有数据中`)) {
+        event.target.value = '';
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // 验证格式
+        if (!data.version || !data.agent_name) {
+          alert('无效的备份文件格式');
+          event.target.value = '';
+          return;
+        }
+
+        const r = await fetch(`${API}/agents/${currentAgent}/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await r.json();
+
+        if (result.success) {
+          alert(`✅ 导入成功！\n\n- 记忆: ${result.results.memories_imported} 条导入, ${result.results.memories_skipped} 条跳过\n- 知识图谱: ${result.results.kg_imported} 项导入\n- 配置文件: ${result.results.config_imported} 个`);
+
+          // 刷新
+          await loadStats(currentAgent);
+          await loadMemories(currentAgent);
+          await loadEntities(currentAgent);
+        } else {
+          alert('导入失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('导入失败: ' + e.message);
+      }
+
+      event.target.value = '';
+    }
+
+    // Markdown 渲染函数
+    function renderMarkdown(text) {
+      if (!text) return '';
+
+      // 配置 marked
+      if (typeof marked !== 'undefined') {
+        marked.setOptions({
+          breaks: true,
+          gfm: true,
+          headerIds: false,
+          mangle: false
+        });
+        return marked.parse(text);
+      }
+
+      // 降级：简单处理
+      return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    }
+
+    // ========== 日历选择器 ==========
+    let currentMonth = new Date();
+
+    // 获取有记忆的日期
+    async function loadMemoryDates(agent) {
+        if (!agent) return;
+
+        try {
+            // 获取最近一个月的记忆
+            const r = await fetch(`${API}/agents/${agent}/memories/time?range=month`);
+            const data = await r.json();
+            const memories = data.memories || [];
+
+            // 提取记忆日期
+            memoryDates.clear();
+            for (const m of memories) {
+                const ts = m.timestamp;
+                if (ts) {
+                    const date = new Date(ts);
+                    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    memoryDates.add(dateStr);
+                }
+            }
+
+            // 同时提取会话日期
+            if (allSessions && allSessions.length > 0) {
+                for (const s of allSessions) {
+                    const ts = s.updatedAt;
+                    if (ts) {
+                        const date = new Date(ts);
+                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                        memoryDates.add(dateStr);
+                    }
+                }
+            }
+
+            // 重新渲染日历
+            renderCalendar();
+        } catch (e) {
+            console.error('loadMemoryDates error:', e);
+        }
+    }
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendarGrid');
+        const title = document.getElementById('calendarTitle');
+
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+
+        title.textContent = `${year}年${month + 1}月`;
+
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        let html = weekdays.map(d => `<div class="calendar-day-header">${d}</div>`).join('');
+
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const startPadding = firstDay.getDay();
+        const totalDays = lastDay.getDate();
+
+        const prevLastDay = new Date(year, month, 0).getDate();
+
+        // 上个月的日期
+        for (let i = startPadding - 1; i >= 0; i--) {
+            const day = prevLastDay - i;
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const hasMemory = memoryDates.has(dateStr);
+            let classes = 'calendar-day other-month';
+            if (hasMemory) classes += ' has-memory';
+            html += `<div class="${classes}" onclick="selectDate(${year}, ${month - 1}, ${day})">${day}</div>`;
+        }
+
+        // 当前月的日期
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        for (let day = 1; day <= totalDays; day++) {
+            const date = new Date(year, month, day);
+            date.setHours(0, 0, 0, 0);
+            const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+            const isToday = date.getTime() === today.getTime();
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const hasMemory = memoryDates.has(dateStr);
+
+            let classes = 'calendar-day';
+            if (isToday) classes += ' today';
+            if (isSelected) classes += ' selected';
+            if (hasMemory) classes += ' has-memory';
+
+            html += `<div class="${classes}" onclick="selectDate(${year}, ${month}, ${day})">${day}</div>`;
+        }
+
+        // 下个月的日期
+        const remaining = 42 - (startPadding + totalDays);
+        for (let i = 1; i <= remaining; i++) {
+            const dateStr = `${year}-${String(month + 2).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            const hasMemory = memoryDates.has(dateStr);
+            let classes = 'calendar-day other-month';
+            if (hasMemory) classes += ' has-memory';
+            html += `<div class="${classes}" onclick="selectDate(${year}, ${month + 1}, ${i})">${i}</div>`;
+        }
+
+        grid.innerHTML = html;
+    }
+
+    function selectDate(year, month, day) {
+        const date = new Date(year, month, day);
+        date.setHours(0, 0, 0, 0);
+
+        // 如果点击的是已选中的日期，则取消选择
+        if (selectedDate && selectedDate.getTime() === date.getTime()) {
+            selectedDate = null;
+            updateDateRangeDisplay();
+            renderCalendar();
+            // 清除会话筛选
+            if (currentAgent && allSessions.length > 0) {
+                renderSessionList(allSessions, null);
+            }
+            return;
+        }
+
+        selectedDate = date;
+
+        updateDateRangeDisplay();
+        renderCalendar();
+
+        if (currentAgent) {
+            // 筛选该日期的会话
+            renderSessionList(allSessions, selectedDate);
+            // 同时加载该日期的记忆
+            loadMemories(currentAgent);
+        }
+    }
+
+    function updateDateRangeDisplay() {
+        const display = document.getElementById('dateRangeDisplay');
+
+        if (selectedDate) {
+            display.textContent = `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`;
+        } else {
+            display.textContent = '选择日期';
+        }
+    }
+
+    function prevMonth() {
+        currentMonth.setMonth(currentMonth.getMonth() - 1);
+        renderCalendar();
+    }
+
+    function nextMonth() {
+        currentMonth.setMonth(currentMonth.getMonth() + 1);
+        renderCalendar();
+    }
+  </script>
+</body>
+</html>

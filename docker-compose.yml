@@ -1,0 +1,31 @@
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.0
+    container_name: weaviate-memory
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --scheme
+      - http
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    restart: on-failure:0
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  weaviate_data:
+    driver: local

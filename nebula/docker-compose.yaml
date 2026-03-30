@@ -1,0 +1,119 @@
+# NebulaGraph Docker Compose 配置
+# 用于知识图谱存储
+
+version: '3.8'
+
+services:
+  # Meta 服务 - 存储元数据
+  metad:
+    image: vesoft/nebula-metad:v3.6.0
+    container_name: nebula-metad
+    environment:
+      USER: root
+    command:
+      - --meta_server_addrs=metad:9559
+      - --local_ip=metad
+      - --ws_ip=metad
+      - --port=9559
+      - --ws_http_port=19559
+      - --data_path=/data/meta
+      - --log_dir=/logs
+      - --v=0
+      - --minloglevel=0
+    ports:
+      - "9559:9559"
+      - "19559:19559"
+    volumes:
+      - nebula-meta:/data/meta
+      - nebula-logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://metad:19559/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - nebula-net
+
+  # Storage 服务 - 存储数据
+  storaged:
+    image: vesoft/nebula-storaged:v3.6.0
+    container_name: nebula-storaged
+    environment:
+      USER: root
+    command:
+      - --meta_server_addrs=metad:9559
+      - --local_ip=storaged
+      - --ws_ip=storaged
+      - --port=9779
+      - --ws_http_port=19779
+      - --data_path=/data/storage
+      - --log_dir=/logs
+      - --v=0
+      - --minloglevel=0
+    ports:
+      - "9779:9779"
+      - "19779:19779"
+    volumes:
+      - nebula-storage:/data/storage
+      - nebula-logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://storaged:19779/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - metad
+    networks:
+      - nebula-net
+
+  # Graph 服务 - 图查询引擎
+  graphd:
+    image: vesoft/nebula-graphd:v3.6.0
+    container_name: nebula-graphd
+    environment:
+      USER: root
+    command:
+      - --meta_server_addrs=metad:9559
+      - --local_ip=graphd
+      - --ws_ip=graphd
+      - --port=9669
+      - --ws_http_port=19669
+      - --log_dir=/logs
+      - --v=0
+      - --minloglevel=0
+    ports:
+      - "9669:9669"
+      - "19669:19669"
+    volumes:
+      - nebula-logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://graphd:19669/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - metad
+      - storaged
+    networks:
+      - nebula-net
+
+  # Nebula Console - 命令行工具（可选）
+  console:
+    image: vesoft/nebula-console:v3.6.0
+    container_name: nebula-console
+    entrypoint: ""
+    command:
+      - sh
+      - -c
+      - "sleep 999999999"
+    networks:
+      - nebula-net
+
+networks:
+  nebula-net:
+    driver: bridge
+
+volumes:
+  nebula-meta:
+  nebula-storage:
+  nebula-logs:

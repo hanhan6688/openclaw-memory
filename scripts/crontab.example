@@ -1,0 +1,14 @@
+# Memory System 定时任务配置
+# 
+# 安装方法:
+# crontab -e
+# 然后添加以下行:
+# 
+# 每小时检查一次
+0 * * * * cd ~/.openclaw/memory_system && source venv/bin/activate && python scripts/health_check.py >> ~/.openclaw/memory_system/health.log 2>&1
+#
+# 每天凌晨 3 点清理重复记忆
+# 0 3 * * * cd ~/.openclaw/memory_system && source venv/bin/activate && python scripts/cleanup_exact.py --agent main --delete >> ~/.openclaw/memory_system/cleanup.log 2>&1
+#
+# 每周日凌晨 4 点打包备份
+# 0 4 * * 0 cd ~/.openclaw/memory_system && ./package.sh $(date +\%Y\%m\%d) >> ~/.openclaw/memory_system/backup.log 2>&1

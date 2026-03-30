@@ -1,0 +1,60 @@
+# OpenClaw Memory System 依赖
+# ================================
+
+# Web 框架
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Weaviate 向量数据库
+weaviate-client>=4.9.0
+
+# NebulaGraph 图数据库 (可选，用于知识图谱)
+nebula3-python>=3.6.0
+
+# HTTP 请求
+requests>=2.31.0
+httpx>=0.25.0
+
+# 数值计算
+numpy>=1.24.0
+
+# 环境变量
+python-dotenv>=1.0.0
+
+# YAML 配置
+pyyaml>=6.0
+
+# 文件监控 (实时同步)
+watchdog>=3.0.0
+
+# 定时任务
+schedule>=1.2.0
+
+# 进度条
+tqdm>=4.65.0
+
+# 数据验证
+pydantic>=2.0.0
+
+# ============== 多模态支持 (可选) ==============
+
+# 图片处理
+Pillow>=10.0.0
+
+# PDF 处理
+PyPDF2>=3.0.0
+
+# HTML 解析
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# 视频处理
+# opencv-python>=4.8.0
+
+# 音频转录 (需要单独安装 whisper)
+# openai-whisper>=20231117
+
+# ============== 其他可选依赖 ==============
+
+# HuggingFace 嵌入模型 (可选，用于本地嵌入)
+# sentence-transformers>=2.7.0
