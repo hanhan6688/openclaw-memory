@@ -22,7 +22,7 @@
 - 🎯 **多 Agent 隔离** - 每个 Agent 独立的记忆空间
 - 🎨 **Web UI** - 美观的可视化界面，支持日历选择和知识图谱展示
 - 📤 **数据导出/导入** - 支持数据备份和迁移
-- ⏰ **时间衰减** - 近期记忆权重更高，自动衰减旧记忆
+- ⏰ **时间锚点衰减** - 先解析自然语言时间锚点，再结合时间衰减给近期记忆更高权重
 - 🔍 **混合检索** - 向量检索 + BM25 关键词检索融合
 - 🎯 **意图识别** - 自动识别查询意图，选择最佳检索策略
 - 🖼️ **多模态支持** - 支持图片、文档、音频、视频存储
@@ -209,10 +209,13 @@ curl "http://localhost:8082/agents/main/memories/search?q=广告&mode=hybrid"
 # 带意图识别的检索
 curl "http://localhost:8082/agents/main/memories/search/intent?q=好像说过什么来着"
 
+# 英文时间锚点检索
+curl "http://localhost:8082/agents/main/memories/search/intent?q=What did we decide 3 days ago?"
+
 # 按时间范围检索
 curl "http://localhost:8082/agents/main/memories/search/time?range=week&q=产品"
 
-# 查看时间衰减权重
+# 查看时间锚点衰减配置（接口名保持兼容）
 curl "http://localhost:8082/agents/main/memories/time-decay"
 
 # 导出数据
@@ -241,11 +244,26 @@ curl "http://localhost:8082/agents/main/memories/search?q=产品需求&mode=bm25
 curl "http://localhost:8082/agents/main/memories/search/intent?q=好像说过什么来着"
 # 精确查询 -> 自动使用 BM25
 curl "http://localhost:8082/agents/main/memories/search/intent?q=具体说了什么"
-# 时间查询 -> 自动使用时间过滤
+# 时间查询 -> 自动提取时间锚点并做时间过滤
 curl "http://localhost:8082/agents/main/memories/search/intent?q=昨天的内容"
+# 英文时间查询同样支持
+curl "http://localhost:8082/agents/main/memories/search/intent?q=The roadmap from last month"
 ```
 
-### 时间衰减权重
+### 时间锚点返回字段
+
+当查询中包含时间表达时，`search/intent` 返回中会额外包含：
+
+- `reference_time`：解析出的参考时间
+- `time_range`：解析出的过滤时间范围
+- `anchor_type`：`point` 或 `range`
+- `anchor_granularity`：`minute` / `hour` / `day` / `week` / `month` / `year`
+- `cleaned_query`：去掉时间短语后的正文查询，用于更干净的语义检索
+
+### 时间锚点衰减权重
+
+系统会先识别时间锚点（如“昨天”“3天前”“last month”“2 hours ago”），
+再在该锚点上下文内应用时间衰减，而不是对所有查询一律做简单的“越新越高”排序。
 
 | 时间 | 权重 |
 |------|------|
