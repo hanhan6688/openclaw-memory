@@ -390,6 +390,3 @@ MIT License
 
 ---
 
-<div align="center">
-Made with ❤️ by OpenClaw Team
-</div>
