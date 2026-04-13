@@ -627,6 +627,11 @@ class MemoryStore:
             "confidence": intent_result["confidence"],
             "reason": intent_result["reason"],
             "time_hint": intent_result.get("time_hint"),
+            "reference_time": intent_result.get("reference_time"),
+            "time_range": intent_result.get("time_range"),
+            "anchor_type": intent_result.get("anchor_type"),
+            "anchor_granularity": intent_result.get("anchor_granularity"),
+            "cleaned_query": intent_result.get("cleaned_query"),
             "results": results,
             "count": len(results)
         }

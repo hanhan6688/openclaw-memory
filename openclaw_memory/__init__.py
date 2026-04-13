@@ -13,23 +13,50 @@ OpenClaw Memory System - AI Agent 长期记忆系统
 
 快速开始:
     from openclaw_memory import MemoryStore
-    
+
     store = MemoryStore("my_agent")
     store.remember("用户喜欢抖音广告投放", importance=0.8)
     results = store.recall("广告投放")
 """
 
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
 __version__ = "1.0.0"
 __author__ = "OpenClaw Team"
 
-from .core.memory_store import MemoryStore
-from .core.knowledge_graph import KnowledgeGraph
-from .core.weaviate_client import WeaviateClient
-from .sync.realtime_sync import RealtimeSyncService
-
 __all__ = [
+    "KnowledgeGraph",
     "MemoryStore",
-    "KnowledgeGraph", 
-    "WeaviateClient",
     "RealtimeSyncService",
+    "WeaviateClient",
 ]
+
+_LAZY_IMPORTS = {
+    "KnowledgeGraph": (".core.knowledge_graph", "KnowledgeGraph"),
+    "MemoryStore": (".core.memory_store", "MemoryStore"),
+    "RealtimeSyncService": (".sync.realtime_sync", "RealtimeSyncService"),
+    "WeaviateClient": (".core.weaviate_client", "WeaviateClient"),
+}
+
+if TYPE_CHECKING:
+    from .core.knowledge_graph import KnowledgeGraph
+    from .core.memory_store import MemoryStore
+    from .core.weaviate_client import WeaviateClient
+    from .sync.realtime_sync import RealtimeSyncService
+
+
+def __getattr__(name: str) -> Any:
+    """按需导入，避免包初始化时强依赖可选组件。"""
+    if name not in _LAZY_IMPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_name, attr_name = _LAZY_IMPORTS[name]
+    module = import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

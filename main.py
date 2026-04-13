@@ -22,7 +22,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 # 加载环境变量
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(*args, **kwargs):
+        return False
+
 load_dotenv()
 
 # 配置日志
@@ -154,24 +159,37 @@ def run_summarizer(agent=None):
     agent = agent or os.getenv("DEFAULT_AGENT", "main")
     
     print(f"\n📝 运行摘要任务 (Agent: {agent})...\n")
-    
-    from scripts.summarizer import Summarizer
-    
+
+    try:
+        from scripts.summarizer import Summarizer
+    except ImportError:
+        print("⚠️ 未找到批量摘要脚本 `scripts/summarizer.py`。")
+        print("   当前仓库仅提供 `openclaw_memory.core.summarizer` 中的文本摘要能力，")
+        print("   但没有按 Agent 批量执行摘要的 CLI 任务。")
+        return False
+
     summarizer = Summarizer(agent)
     result = summarizer.run_summarization()
-    
+
     print(f"\n📊 结果: {result}\n")
-    
+
     summarizer.close()
+    return True
 
 
 def run_learner(action=None):
     """运行学习任务"""
     print(f"\n🧠 运行学习任务 ({action or 'optimize'})...\n")
-    
-    from scripts.learner import run_optimization
-    
+
+    try:
+        from scripts.learner import run_optimization
+    except ImportError:
+        print("⚠️ 未找到学习优化脚本 `scripts/learner.py`。")
+        print("   当前版本尚未包含 CLI 学习任务入口，请先补充对应脚本后再运行该命令。")
+        return False
+
     run_optimization(action)
+    return True
 
 
 def main():
@@ -213,18 +231,24 @@ def main():
     
     # 执行命令
     if args.command == "check":
-        check_dependencies()
+        return 0 if check_dependencies() else 1
     elif args.command == "api":
         if check_dependencies():
             start_api_server(args.port)
+            return 0
+        return 1
     elif args.command == "sync":
         if check_dependencies():
             start_sync_service()
+            return 0
+        return 1
     elif args.command == "summarize":
-        run_summarizer(args.agent)
+        return 0 if run_summarizer(args.agent) else 1
     elif args.command == "learn":
-        run_learner(args.action)
+        return 0 if run_learner(args.action) else 1
+
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
